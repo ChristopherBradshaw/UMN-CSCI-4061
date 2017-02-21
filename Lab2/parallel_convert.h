@@ -1,3 +1,10 @@
+/* Information
+CSci 4061 Spring 2017 Assignment 2
+Name1=Christopher Bradshaw
+StudentID1=5300734
+Commentary=This program converts images of various formats to jpgs and
+  creates HTML pages out of the thumbnails which will automatically cycle
+*/
 #ifndef PARALLEL_CONVERT_H
 #define PARALLEL_CONVERT_H
 
