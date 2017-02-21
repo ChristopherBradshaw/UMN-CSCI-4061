@@ -42,6 +42,9 @@ static int valid_files_size = 0;
 
 /* Functions */
 
+/* Selects a file from input_dir and processes it (or deletes it if it's junk) */
+void handle_next_file(void);
+
 /* Generates and writes the HTML file for this image */
 void build_and_write_html_file(const char *base_name);
 

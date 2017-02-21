@@ -17,8 +17,6 @@ Commentary=This program converts images of various formats to jpgs and
 #include <sys/wait.h>
 #include <ctype.h>
 #include <stdio.h>
-
-
 #include "parallel_convert.h"
 
 int main(int argc, char **argv)
@@ -26,17 +24,18 @@ int main(int argc, char **argv)
 	long parent_pid = (long) getpid();
 	long pid;
 
+	/* Validate cmd line args */
 	if(argc != 4)
 	{
 		fprintf(stderr,"%s\n",USAGE); 
 		return 1;
 	}
 
+	/* Initialize some variables, make sure logs are clean */
 	output_dir = argv[2];
 	input_dir = argv[3];
-
-	clear_log();
 	clear_junk();
+	clear_log();
 	write_log("Starting...",LOG);
 	analyze_input_directory();
 
@@ -47,65 +46,70 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	/* Make sure output directory exists and is accessable */
 	if(!read_dir(output_dir)) 
 	{
 		write_log("Could not access output directory.. creating one",LOG);	
 		mkdir(output_dir,0700);
 	}
 
-	/* Keep spawning children processes until all files have been converted */
+	/* Keep spawning children processes until all files have been managed */
 	while(getpid() == parent_pid && more_files_to_process())
 	{
+		/* create_children returns non-zero status in the event of an error */
 		if(create_children(atoi(argv[1])))
 		{
 			write_log("Could not create children processes",LOG);	
 			return 1;
 		}
 
-		/* Begin processing of input images */
-		pid = (long) getpid();	
-		if(pid != parent_pid)
-		{
-			const char *f_name = get_next_file(pid);
-			if(f_name != NULL)
-			{
-				if(IS_JUNK_PROCESS(pid))
-				{
-					/* We're going to be removing a junk file */
-					const char *tmp;
-					asprintf(&tmp, "Removing junk: %s", f_name);
-					write_log(tmp,LOG);
-					asprintf(&tmp,"%s/%s",input_dir,f_name);
-					execlp("rm","rm",tmp,NULL);
-				}
-				else
-				{
-					/* We're going to be converting a file */
-					const char *tmp;
-					const char *src;
-					const char *dst;
-					const char *base_file = get_file_name_no_ext(f_name);
-					asprintf(&src,"%s/%s",input_dir,f_name);
-					asprintf(&dst,"%s/%s%s",output_dir,base_file,OUTPUT_IMAGE_FORMAT);
-					asprintf(&tmp,"Converting file: %s -> %s of size by process %ld",\
-							src,dst,pid);
-					write_log(tmp,LOG);
-					build_and_write_html_file(base_file);
-					execlp("convert","convert","-resize",OUTPUT_IMAGE_DIMENSIONS,src,dst,NULL);
-				}
-			}
-		}
+		/* Process a file if we're a child process, 
+		 * or wait for all children if we're the parent */
+		if((long) getpid() != parent_pid)
+			handle_next_file();			
 		else
-		{
-			/* We're the parent process, block until all children are done */
 			while(r_wait(NULL) > 0) ;
-		}
 	}
 
 	if(getpid() == parent_pid)
 		write_log("Done!",LOG);
 
 	return 0;
+}
+
+/* Selects a file from input_dir and processes it (or deletes it if it's junk) */
+void handle_next_file(void)
+{
+	long pid = (long) getpid();
+	const char *f_name = get_next_file(pid);
+
+	if(f_name != NULL)
+	{
+		if(IS_JUNK_PROCESS(pid))
+		{
+			/* We're going to be removing a junk file */
+			const char *tmp;
+			asprintf(&tmp, "Removing junk: %s", f_name);
+			write_log(tmp,LOG);
+			asprintf(&tmp,"%s/%s",input_dir,f_name);
+			execlp("rm","rm",tmp,NULL);
+		}
+		else
+		{
+			/* We're going to be converting a file */
+			const char *tmp;
+			const char *src;
+			const char *dst;
+			const char *base_file = get_file_name_no_ext(f_name);
+			asprintf(&src,"%s/%s",input_dir,f_name);
+			asprintf(&dst,"%s/%s%s",output_dir,base_file,OUTPUT_IMAGE_FORMAT);
+			asprintf(&tmp,"Converting file: %s -> %s of size by process %ld",\
+					src,dst,pid);
+			write_log(tmp,LOG);
+			build_and_write_html_file(base_file);
+			execlp("convert","convert","-resize",OUTPUT_IMAGE_DIMENSIONS,src,dst,NULL);
+		}
+	}
 }
 
 /* Generates and writes the HTML file for this image */
