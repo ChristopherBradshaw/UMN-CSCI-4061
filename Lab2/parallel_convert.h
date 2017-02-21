@@ -14,10 +14,12 @@
 #define JUNK_FILE_NAME "nonImage.txt"
 #define OUTPUT_IMAGE_FORMAT ".jpg"
 #define OUTPUT_IMAGE_DIMENSIONS "200x200"
+#define HTML_CYCLE_INTERVAL 2
 #define IS_GIF_PROCESS(pid) (pid % 3 == 0 && pid % 2 == 0)
 #define IS_PNG_PROCESS(pid) (pid % 2 == 0 && pid % 3 != 0)
 #define IS_BMP_PROCESS(pid) (pid % 3 == 0 && pid % 2 != 0)
 #define IS_JUNK_PROCESS(pid) (pid % 3 != 0 && pid % 2 != 0)
+#define IS_JUNK_TYPE(type) (strcmp(type,"png") && strcmp(type,"gif") && strcmp(type,"bmp"))
 
 /* Variables */
 
@@ -78,6 +80,7 @@ void write_junk(const char *msg);
 /* Removes the junk file */
 void clear_junk(void);
 
+/* Converts str to lower case */
 void to_lower(char *str);
 
 #endif

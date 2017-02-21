@@ -1,10 +1,9 @@
 /* Information
 CSci 4061 Spring 2017 Assignment 2
 Name1=Christopher Bradshaw
-Name2=Christopher Dang
 StudentID1=5300734
-StudentID2=TODO
-Commentary=TODO
+Commentary=This program converts images of various formats to jpgs and
+	creates HTML pages out of the thumbnails which will automatically cycle
 */
 
 #include <stdio.h>
@@ -126,11 +125,11 @@ void build_and_write_html_file(const char *base_name)
 	else
 	{
 		asprintf(&output,"<html><head><title>%s</title></head><body>\
-			<img src=%s%s /><meta http-equiv=\'refresh\' content=\"2;URL=./%s.html\">\
+			<img src=%s%s /><meta http-equiv=\'refresh\' content=\"%d;URL=./%s.html\">\
 			</body></html>\n",base_name,\
-			base_name,OUTPUT_IMAGE_FORMAT,next_html_file(base_name));
+			base_name,OUTPUT_IMAGE_FORMAT,HTML_CYCLE_INTERVAL,next_html_file(base_name));
 
-		fprintf(fp,output);
+		fputs(output,fp);
 		fclose(fp);
 	}
 }
@@ -169,19 +168,17 @@ void analyze_input_directory(void)
 			char *type = (char *) get_file_type(input_ep->d_name);
 			to_lower(type);
 
-			int not_junk = 0;
-			not_junk |= !strcmp(type,"png");
-			not_junk |= !strcmp(type,"gif");
-			not_junk |= !strcmp(type,"bmp");
-
-			if(not_junk)
+			if(IS_JUNK_TYPE(type))
 			{
-				char *base_name = (char *) get_file_name_no_ext(input_ep->d_name);
-				valid_files[valid_files_size++] = base_name;
+				/* Record this file name in the proper junk file */
+				write_junk(input_ep->d_name);
 			}
 			else
 			{
-				write_junk(input_ep->d_name);
+				/* If it's a valid file, store it in an array (this allows child processes
+				 * to build HTML files that link to the "next" one) */
+				char *base_name = (char *) get_file_name_no_ext(input_ep->d_name);
+				valid_files[valid_files_size++] = base_name;
 			}
 		}
 	}
@@ -230,12 +227,7 @@ const char *get_next_file(long pid)
 			if(desired_file_type == NULL)
 			{
 				/* Junk file case, if this file isn't a png/gif/bmp, return it */
-				int not_junk = 0;
-				not_junk |= !strcmp(type,"png");
-				not_junk |= !strcmp(type,"gif");
-				not_junk |= !strcmp(type,"bmp");
-
-				if(!not_junk)
+				if(IS_JUNK_TYPE(type))
 				{
 					next_file = f_name;
 					break;
@@ -248,7 +240,8 @@ const char *get_next_file(long pid)
 				if(strcmp(type,desired_file_type) == 0)
 				{
 					char *expected_f_name;
-					asprintf(&expected_f_name,"%s/%s%s",output_dir,f_name_no_ext,OUTPUT_IMAGE_FORMAT);
+					asprintf(&expected_f_name,"%s/%s%s",
+							output_dir,f_name_no_ext,OUTPUT_IMAGE_FORMAT);
 					if(access(expected_f_name,F_OK) == -1)
 					{
 						next_file = f_name;
@@ -298,7 +291,8 @@ int more_files_to_process(void)
 				continue;
 
 			char *tmp;
-			asprintf(&tmp,"%s/%s%s",output_dir,get_file_name_no_ext(input_ep->d_name),OUTPUT_IMAGE_FORMAT);
+			asprintf(&tmp,"%s/%s%s",output_dir,
+					get_file_name_no_ext(input_ep->d_name),OUTPUT_IMAGE_FORMAT);
 			if(access(tmp,F_OK) == -1)
 			{
 				asprintf(&tmp,"Found at least one more file to process:%s",tmp);
@@ -356,7 +350,8 @@ int create_children(int num_children)
 	if((long)getpid() != parent_pid)
 	{
 		char *msg;
-		asprintf(&msg, "Created child process [ID:%ld, Parent ID:%ld]",(long)getpid(), (long)getppid());
+		asprintf(&msg, "Created child process [ID:%ld, Parent ID:%ld]",
+				(long)getpid(),(long)getppid());
 		write_log(msg,DEBUG);
 	}
 
@@ -371,12 +366,16 @@ pid_t r_wait(int *stat_loc)
 	return retval;
 }
 
+/* Writes msg to the log file */
 void write_log(const char *msg, int level)
 {
 	if(level == DEBUG && !DEBUG_MODE)
 		return;
 
-	FILE *f = fopen(LOG_FILE_NAME, "ab+");
+	char *f_name;
+	asprintf(&f_name,"%s/%s",output_dir,LOG_FILE_NAME);
+
+	FILE *f = fopen(f_name, "ab+");
 	if (f)
 	{
 		fprintf(f,"> %s\n", msg);
@@ -384,15 +383,23 @@ void write_log(const char *msg, int level)
 	}	
 }
 
+/* Removes the log file */
 void clear_log()
 {
-	if(access(LOG_FILE_NAME, F_OK) != -1)
-		remove(LOG_FILE_NAME);
+	char *f_name;
+	asprintf(&f_name,"%s/%s",output_dir,LOG_FILE_NAME);
+
+	if(access(f_name, F_OK) != -1)
+		remove(f_name);
 }
 
+/* Writes msg to the junk file */
 void write_junk(const char *msg)
 {
-	FILE *f = fopen(JUNK_FILE_NAME, "ab+");
+	char *f_name;
+	asprintf(&f_name,"%s/%s",output_dir,JUNK_FILE_NAME);
+
+	FILE *f = fopen(f_name, "ab+");
 	if (f)
 	{
 		fprintf(f,"%s\n", msg);
@@ -400,13 +407,18 @@ void write_junk(const char *msg)
 	}	
 }
 
+/* Removes the junk file */
 void clear_junk()
 {
+	char *f_name;
+	asprintf(&f_name,"%s/%s",output_dir,JUNK_FILE_NAME);
+
 	if(access(JUNK_FILE_NAME, F_OK) != -1)
 		remove(JUNK_FILE_NAME);
 }
+
+/* Converts str to lower case */
 void to_lower(char *str)
 {
-	  for ( ; *str; ++str) *str= tolower(*str);
+	for ( ; *str; ++str) *str= tolower(*str);
 }
-
