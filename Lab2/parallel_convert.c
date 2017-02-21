@@ -13,11 +13,17 @@ Commentary=TODO
 #include <errno.h>
 #include <dirent.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <ctype.h>
+#include <stdio.h>
+
 
 #include "parallel_convert.h"
 
 int main(int argc, char **argv)
-{	
+{
 	long parent_pid = (long) getpid();
 	long pid;
 
@@ -33,7 +39,8 @@ int main(int argc, char **argv)
 	clear_log();
 	clear_junk();
 	write_log("Starting...",LOG);
-	
+	analyze_input_directory();
+
 	/* Make sure input directory exists and is readable */
 	if(!read_dir(input_dir)) 
 	{
@@ -69,7 +76,6 @@ int main(int argc, char **argv)
 					const char *tmp;
 					asprintf(&tmp, "Removing junk: %s", f_name);
 					write_log(tmp,LOG);
-					write_junk(f_name);
 					asprintf(&tmp,"%s/%s",input_dir,f_name);
 					execlp("rm","rm",tmp,NULL);
 				}
@@ -85,24 +91,100 @@ int main(int argc, char **argv)
 					asprintf(&tmp,"Converting file: %s -> %s of size by process %ld",\
 							src,dst,pid);
 					write_log(tmp,LOG);
+					build_and_write_html_file(base_file);
 					execlp("convert","convert","-resize",OUTPUT_IMAGE_DIMENSIONS,src,dst,NULL);
 				}
 			}
 		}
 		else
 		{
-			// We are the parent process,
-			// block until all children are done
+			/* We're the parent process, block until all children are done */
 			while(r_wait(NULL) > 0) ;
 		}
 	}
 
-	// Build HTML files?
-	
 	if(getpid() == parent_pid)
 		write_log("Done!",LOG);
 
 	return 0;
+}
+
+/* Generates and writes the HTML file for this image */
+void build_and_write_html_file(const char *base_name)
+{
+	char *output;
+	char *dst;
+	asprintf(&dst,"%s/%s.html",output_dir,base_name);
+
+	FILE *fp = fopen(dst,"w");
+	if(fp == NULL)
+	{
+		asprintf(&output,"Failed to write HTML file: %s", dst);
+		write_log(output,LOG);
+		return;
+	}
+	else
+	{
+		asprintf(&output,"<html><head><title>%s</title></head><body>\
+			<img src=%s%s /><meta http-equiv=\'refresh\' content=\"2;URL=./%s.html\">\
+			</body></html>\n",base_name,\
+			base_name,OUTPUT_IMAGE_FORMAT,next_html_file(base_name));
+
+		fprintf(fp,output);
+		fclose(fp);
+	}
+}
+
+/* Returns next base file name to link to for the HTML page */
+const char *next_html_file(const char *base_name)
+{
+	int i;
+	for(i = 0; i < valid_files_size; ++i)
+	{
+		if(strcmp(base_name,valid_files[i]) == 0)
+		{
+			int next_idx = (i + 1 == valid_files_size ? 0 : i+1);
+			return valid_files[next_idx];
+		}
+	}
+
+	return NULL;
+}
+
+/* Makes initial pass of the input directory- writes junk file names to a
+ * junk log file and builds an array of valid files */
+void analyze_input_directory(void)
+{
+	DIR *input_dp;
+	struct dirent *input_ep;
+	input_dp = opendir(input_dir);
+
+	if(input_dp != NULL)
+	{
+		while(input_ep = readdir(input_dp))
+		{
+			if(input_ep->d_type != DT_REG || !strcmp(input_ep->d_name,".DS_Store"))
+				continue;
+
+			char *type = (char *) get_file_type(input_ep->d_name);
+			to_lower(type);
+
+			int not_junk = 0;
+			not_junk |= !strcmp(type,"png");
+			not_junk |= !strcmp(type,"gif");
+			not_junk |= !strcmp(type,"bmp");
+
+			if(not_junk)
+			{
+				char *base_name = (char *) get_file_name_no_ext(input_ep->d_name);
+				valid_files[valid_files_size++] = base_name;
+			}
+			else
+			{
+				write_junk(input_ep->d_name);
+			}
+		}
+	}
 }
 
 /* Return the next file for this process to process */
@@ -216,7 +298,7 @@ int more_files_to_process(void)
 				continue;
 
 			char *tmp;
-			asprintf(&tmp,"%s/%s%s",output_dir,input_ep->d_name,OUTPUT_IMAGE_FORMAT);
+			asprintf(&tmp,"%s/%s%s",output_dir,get_file_name_no_ext(input_ep->d_name),OUTPUT_IMAGE_FORMAT);
 			if(access(tmp,F_OK) == -1)
 			{
 				asprintf(&tmp,"Found at least one more file to process:%s",tmp);

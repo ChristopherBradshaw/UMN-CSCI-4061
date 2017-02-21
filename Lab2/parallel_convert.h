@@ -9,6 +9,7 @@
 
 #define USAGE "Usage: parallel_convert [convert_count] [output_dir] [input_dir]"
 #define MAX_NUM_CHILDREN_PROCESSES 10
+#define MAX_NUM_FILES 100
 #define LOG_FILE_NAME "log.file"
 #define JUNK_FILE_NAME "nonImage.txt"
 #define OUTPUT_IMAGE_FORMAT ".jpg"
@@ -26,7 +27,21 @@ static char *input_dir;
 /* Output directory name */
 static char *output_dir;
 
+/* Valid file names-- used for HTML generation (extensions not stored) */
+static char *valid_files[MAX_NUM_FILES];
+static int valid_files_size = 0;
+
 /* Functions */
+
+/* Generates and writes the HTML file for this image */
+void build_and_write_html_file(const char *base_name);
+
+/* Returns next base file name to link to for the HTML page */
+const char *next_html_file(const char *base_name);
+
+/* Makes initial pass of the input directory- writes junk file names to a
+ * junk log file and builds an array of valid files */
+void analyze_input_directory(void);
 
 /* Return the next file for this process to process */
 const char *get_next_file(long pid);
