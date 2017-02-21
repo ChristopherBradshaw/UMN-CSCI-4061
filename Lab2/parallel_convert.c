@@ -43,6 +43,7 @@ int main(int argc, char **argv)
 	if(!read_dir(input_dir)) 
 	{
 		write_log("Could not access input directory",LOG);	
+		perror("Could not access input directory");
 		return 1;
 	}
 
@@ -68,7 +69,10 @@ int main(int argc, char **argv)
 		if((long) getpid() != parent_pid)
 			handle_next_file();			
 		else
+		{
+			write_log("Waiting for children to finish..",LOG);
 			while(r_wait(NULL) > 0) ;
+		}
 	}
 
 	if(getpid() == parent_pid)
@@ -124,6 +128,7 @@ void build_and_write_html_file(const char *base_name)
 	{
 		asprintf(&output,"Failed to write HTML file: %s", dst);
 		write_log(output,LOG);
+		perror("Failed to write HTML file");
 		return;
 	}
 	else
@@ -185,6 +190,10 @@ void analyze_input_directory(void)
 				valid_files[valid_files_size++] = base_name;
 			}
 		}
+	}
+	else
+	{
+		perror("Could not read input directory");
 	}
 }
 
@@ -259,6 +268,10 @@ const char *get_next_file(long pid)
 
 		closedir(input_dp);
 	}
+	else
+	{
+		perror("Error while opening input directory");
+	}
 
 	return next_file;
 }
@@ -305,10 +318,15 @@ int more_files_to_process(void)
 			}
 		}
 	}
+	else
+	{
+		perror("Error while opening input directory");
+	}
 
 	return 0;
 }
 
+/* Return non-zero value if directory exists and is readable, false otherwise */
 int read_dir(const char *dir_name)
 {
 	DIR* dir = opendir(dir_name);
@@ -343,7 +361,10 @@ int create_children(int num_children)
 	int i;
 
 	if(num_children <= 0 || num_children > MAX_NUM_CHILDREN_PROCESSES)
+	{
+		fprintf(stderr,"Error: number of children processes must be in the range 1-%d\n",MAX_NUM_CHILDREN_PROCESSES);
 		return -1;	
+	}
 
 	write_log("Creating children processes...",DEBUG);
 
@@ -384,7 +405,11 @@ void write_log(const char *msg, int level)
 	{
 		fprintf(f,"> %s\n", msg);
 		fclose(f);
-	}	
+	}
+	else
+	{
+		perror("Could not open log file");
+	}
 }
 
 /* Removes the log file */
@@ -409,6 +434,10 @@ void write_junk(const char *msg)
 		fprintf(f,"%s\n", msg);
 		fclose(f);
 	}	
+	else
+	{
+		perror("Could not open junk file");
+	}
 }
 
 /* Removes the junk file */
