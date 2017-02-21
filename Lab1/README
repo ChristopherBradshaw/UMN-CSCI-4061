@@ -1,0 +1,41 @@
+CSci4061 Spring 2017 Assignment 1
+Name: Christopher Bradshaw, Christopher Dang
+Student ID: 5300734, 5323765
+
+Usage:
+	create_images.sh <input_directory> <output_directory> <pattern_1> [pattern_2] ... [pattern_n]
+
+Example: 
+	./create_images.sh input_directory output_directory "*.png" "*.tiff" "*.gif"
+
+Arguments: 
+	- input_directory
+		(required) Specifies directory for input.
+
+	- output_directory
+		(required) Specifies directory for output.
+		
+	- patterns:
+		Regular expression searching for .png, .tiff, and .gif are 
+		valid arguements. At least one pattern must be provided.
+
+What script does:
+	Given an input directory containing images and specified
+	patterns (png, gif, tiff are the only supported file types), images matching the patterns will be 
+	converted to .jpg format. Each converted image will produce a thumbnail and
+	will be placed with other thumbnails in a folder. An HTML file is created that
+	allows the files to be viewed from a web browser.
+
+
+How it works:
+	Command line argument requirements are first enforced. If an invalid number of arguments is present
+	or a non-existant/non-readable input directory is specified, the program will terminate. Otherwise,
+	the script will recursively find all files within the input directory matching the patterns and generate
+	new .jpg files (one with the same dimensions and one thumbnail). Once every image has been processed, 
+	the user is prompted with a "theme". At the end of all processing, an HTML file is generated displaying 
+	the newly converted pictures and their respective dates, dimensions, etc. The HTML file also includes 
+	the current date as well as the theme just entered.
+
+Output Interpretation:
+	Status of the program is output at appropriate times throughout execution of the program. At a minimum,
+	a start message and end message are generated. 
