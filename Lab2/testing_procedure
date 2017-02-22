@@ -1,0 +1,11 @@
+How many children processes should be spawned to get the job done in the minimum amount of time?
+Number of child processes range from 1-10
+
+Files:
+run.sh (num_children_proc) -- this cleans up input/output before and runs
+	the conversion with the specified number of child processes
+input_dir -- contains 40+ images to be converted
+do_test.sh (trials per test) -- this calls run.sh the specified number of times for each possible # of child proccesses (1-10), so 50 total calls.
+	execution time for all 50 trials is recorded
+
+Analysis:
