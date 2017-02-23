@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 	input_dir = argv[3];
 	clear_junk();
 	clear_log();
-	write_log("Starting...",LOG);
+	write_log("Starting...\n",LOG);
 	analyze_input_directory();
 
 	/* Make sure input directory exists and is readable */
@@ -70,8 +70,9 @@ int main(int argc, char **argv)
 			handle_next_file();			
 		else
 		{
-			write_log("Waiting for children to finish..",LOG);
+			write_log("Waiting for all children to finish..",LOG);
 			while(r_wait(NULL) > 0) ;
+      write_log("Children have finished\n",LOG);
 		}
 	}
 
@@ -366,7 +367,7 @@ int create_children(int num_children)
 		return -1;	
 	}
 
-	write_log("Creating children processes...",DEBUG);
+	write_log("Creating children processes...",LOG);
 
 	for(i = 0; i < num_children; ++i)
 		if((childpid = fork()) <= 0)
@@ -397,6 +398,7 @@ void write_log(const char *msg, int level)
 	if(level == DEBUG && !DEBUG_MODE)
 		return;
 
+  //printf("%s\n",msg);
 	char *f_name;
 	asprintf(&f_name,"%s/%s",output_dir,LOG_FILE_NAME);
 
