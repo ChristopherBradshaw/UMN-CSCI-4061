@@ -108,11 +108,27 @@ void handle_next_file(void)
 			const char *base_file = get_file_name_no_ext(f_name);
 			asprintf(&src,"%s/%s",input_dir,f_name);
 			asprintf(&dst,"%s/%s%s",output_dir,base_file,OUTPUT_IMAGE_FORMAT);
-			asprintf(&tmp,"Converting file: %s -> %s of size by process %ld",\
-					src,dst,pid);
-			write_log(tmp,LOG);
-			build_and_write_html_file(base_file);
-			execlp("convert","convert","-resize",OUTPUT_IMAGE_DIMENSIONS,src,dst,NULL);
+
+			/* In order to have the log statement printed AFTER conversion completes,
+			 * we must fork execution again. The parent waits for child conversion to
+			 * complete then prints/logs a message. The parent also handles
+			 * HTML generation. */
+			long child_pid = fork();
+			if(child_pid != 0)
+			{
+				/* Parent builds HTML file and then waits for child conversion to complete 
+				 * before logging the conversion */
+				build_and_write_html_file(base_file);
+				while(r_wait(NULL) > 0) ;
+				asprintf(&tmp,"Converted file: %s -> %s of size by process %ld",\
+						src,dst,pid);
+				write_log(tmp,LOG);
+			}
+			else
+			{
+				/* Child converts the file */
+				execlp("convert","convert","-resize",OUTPUT_IMAGE_DIMENSIONS,src,dst,NULL);
+			}
 		}
 	}
 }
@@ -130,10 +146,11 @@ void build_and_write_html_file(const char *base_name)
 		asprintf(&output,"Failed to write HTML file: %s", dst);
 		write_log(output,LOG);
 		perror("Failed to write HTML file");
-		return;
 	}
 	else
 	{
+		/* This HTML file simply contains an image and automatically redirects
+		 * to the next HTML file */
 		asprintf(&output,"<html><head><title>%s</title></head><body>\
 			<img src=%s%s /><meta http-equiv=\'refresh\' content=\"%d;URL=./%s.html\">\
 			</body></html>\n",base_name,\
@@ -152,6 +169,7 @@ const char *next_html_file(const char *base_name)
 	{
 		if(strcmp(base_name,valid_files[i]) == 0)
 		{
+			/* Return the next index (treated as a circular array) */
 			int next_idx = (i + 1 == valid_files_size ? 0 : i+1);
 			return valid_files[next_idx];
 		}
@@ -172,6 +190,7 @@ void analyze_input_directory(void)
 	{
 		while(input_ep = readdir(input_dp))
 		{
+			/* Ignore unimportant files */
 			if(input_ep->d_type != DT_REG || !strcmp(input_ep->d_name,".DS_Store"))
 				continue;
 
@@ -203,6 +222,8 @@ const char *get_next_file(long pid)
 {
 	const char *next_file = NULL;
 	const char *desired_file_type = NULL;
+
+	/* What type of file should this PID be processing? */
 	if(!IS_JUNK_PROCESS(pid))
 	{
 		if(IS_GIF_PROCESS(pid)) 
@@ -227,14 +248,13 @@ const char *get_next_file(long pid)
 	{
 		while(input_ep = readdir(input_dp))
 		{
+			/* Ignore unimportant files */
 			if(input_ep->d_type != DT_REG || !strcmp(input_ep->d_name,".DS_Store")) 
 				continue;
 
 			char *f_name = (char*) malloc(strlen(input_ep->d_name)+1);
 			strcpy(f_name,input_ep->d_name);
-
 			const char *f_name_no_ext = get_file_name_no_ext(f_name);
-
 			char *type = (char *) get_file_type(f_name);
 			to_lower(type);
 
@@ -256,6 +276,9 @@ const char *get_next_file(long pid)
 					char *expected_f_name;
 					asprintf(&expected_f_name,"%s/%s%s",
 							output_dir,f_name_no_ext,OUTPUT_IMAGE_FORMAT);
+
+					/* If this file hasn't been converted (not in output directory),
+					 * we found the next file to choose. */
 					if(access(expected_f_name,F_OK) == -1)
 					{
 						next_file = f_name;
@@ -305,12 +328,15 @@ int more_files_to_process(void)
 	{
 		while(input_ep = readdir(input_dp))
 		{
+			/* Ignore unimportant files */
 			if(input_ep->d_type != DT_REG || !strcmp(input_ep->d_name,".DS_Store")) 
 				continue;
 
 			char *tmp;
 			asprintf(&tmp,"%s/%s%s",output_dir,
 					get_file_name_no_ext(input_ep->d_name),OUTPUT_IMAGE_FORMAT);
+
+			/* We found a file that hasn't been handled, need to keep doing work */
 			if(access(tmp,F_OK) == -1)
 			{
 				asprintf(&tmp,"Found at least one more file to process:%s",tmp);
@@ -369,12 +395,15 @@ int create_children(int num_children)
 
 	write_log("Creating children processes...",LOG);
 
+	/* Spawn the correct number of children. Child processes do not
+	 * get any children of their own. */
 	for(i = 0; i < num_children; ++i)
 		if((childpid = fork()) <= 0)
 			break;
 
 	if((long)getpid() != parent_pid)
 	{
+		/* This is a newly created child */
 		char *msg;
 		asprintf(&msg, "Created child process [ID:%ld, Parent ID:%ld]",
 				(long)getpid(),(long)getppid());
@@ -398,7 +427,7 @@ void write_log(const char *msg, int level)
 	if(level == DEBUG && !DEBUG_MODE)
 		return;
 
-  //printf("%s\n",msg);
+  printf("%s\n",msg);
 	char *f_name;
 	asprintf(&f_name,"%s/%s",output_dir,LOG_FILE_NAME);
 
