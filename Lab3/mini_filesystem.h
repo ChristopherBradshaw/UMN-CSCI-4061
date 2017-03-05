@@ -1,5 +1,8 @@
-/* CSCI 4061 Assignment 3
-   mini_filesystem.h
+/* Information
+CSci 4061 Spring 2017 Assignment 3
+Name1=Christopher Bradshaw
+StudentID1=5300734
+Commentary=This program simulates a virtual in-memory filesystem
 */
 
 #ifndef MINI_FILESYSTEM_H
@@ -8,6 +11,7 @@
 #define MAXFILES 128
 #define MAXBLOCKS 8192
 #define BLOCKSIZE 512
+#define DEBUG 1
 
 typedef struct superblock
 {
@@ -47,10 +51,13 @@ char* Log_Filename;
    See the assignment for more details */
 
 int Initialize_Filesystem(char* log_filename);
-int Create_File(char* filename);
+int Create_File(char* filename, int UID, int GID, int filesize);
 int Open_File(char* filename);
 int Read_File(int inode_number, int offset, int count, char* to_read);
 int Write_File(int inode_number, int offset, char* to_write);
 int Close_File(int inode_number);
+
+/* Utility functions */
+void debug(char*);
 
 #endif
