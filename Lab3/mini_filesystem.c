@@ -90,6 +90,7 @@ int Create_File(char* filename, int UID, int GID, int filesize)
   };
   
   /* Put the entry in the INode table */
+  printf("Node: %d\n", new_inode.Inode_Number);
   int inode_idx;
   if((inode_idx = Inode_Write(new_inode.Inode_Number,new_inode)) == -1)
   {
@@ -246,6 +247,7 @@ int Add_to_Directory(char* filename, int inode_number)
  * otherwise. */
 Inode Inode_Read(int inode_number)
 {
+  printf("Reading: %d\n",inode_number);
   if(inode_number >= inode_list_size)
   {
     /* Invalid inode index */
@@ -268,8 +270,9 @@ int Inode_Write(int inode_number, Inode input_inode)
     return -1;
   }
 
-  Inode_List[inode_number++] = input_inode;
-  return 1;
+  printf("Writing: %d\n",inode_list_size);
+  Inode_List[inode_list_size] = input_inode;
+  return inode_list_size++;
 }
 
 /* Read the specified number of bytes from the blocks and write
