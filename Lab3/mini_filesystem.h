@@ -9,7 +9,8 @@ Commentary=This program simulates a virtual in-memory filesystem
 #define MINI_FILESYSTEM_H
 
 #define MAXFILES 128
-#define MAXBLOCKS 8192
+//#define MAXBLOCKS 8192
+#define MAXBLOCKS 16
 #define BLOCKSIZE 512
 #define DEBUG 1
 
@@ -43,6 +44,9 @@ Directory Directory_Structure[MAXFILES];
 Inode Inode_List[MAXFILES];
 char* Disk_Blocks[MAXBLOCKS];
 
+int inode_list_size;
+int directory_size;
+
 /* Declare variable for Count and Log Filename */
 int Count;
 char* Log_Filename;
@@ -59,5 +63,6 @@ int Close_File(int inode_number);
 
 /* Utility functions */
 void debug(char*);
+void print_memory(void);
 
 #endif

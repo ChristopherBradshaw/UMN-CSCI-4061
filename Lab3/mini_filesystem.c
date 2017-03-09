@@ -13,6 +13,7 @@ Commentary=This program simulates a virtual in-memory filesystem
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 /* Filesystem call declarations */
 
@@ -33,6 +34,15 @@ void debug(char *msg)
     fprintf(stderr,"DEBUG: %s\n",msg);
 }
 
+void print_memory(void)
+{
+  int i;
+  for(i = 0; i < MAXBLOCKS; i++)
+  {
+    printf("%d:%s|\n",i,Disk_Blocks[i]);
+  }
+}
+
 
 /* Filesystem interface definitions */
 
@@ -42,6 +52,15 @@ int Initialize_Filesystem(char* log_filename)
   Log_Filename = log_filename;
   Superblock.next_free_inode = 0;
   Superblock.next_free_block = 0;
+  directory_size = 0;
+  inode_list_size = 0;
+  /* Initialize blocks */
+  int i;
+  for(i = 0; i < MAXBLOCKS; i++)
+  {
+    Disk_Blocks[i] = calloc(BLOCKSIZE, sizeof(char));
+  }
+
   return 1;
 }
 
@@ -63,7 +82,7 @@ int Create_File(char* filename, int UID, int GID, int filesize)
     .Inode_Number = Superblock_Read().next_free_inode,
     .User_Id = UID,
     .Group_Id = GID,
-    .File_Size = filesize,
+    .File_Size = 0,
     .Start_Block = Superblock_Read().next_free_block,
     .End_Block = Superblock_Read().next_free_block 
       + (int) ceil((float)filesize / BLOCKSIZE),
@@ -134,8 +153,8 @@ int Read_File(int inode_number, int offset, int count, char* to_read)
   int current_block = inode.Start_Block;
   while(total_read <= count && current_block <= inode.End_Block)
   {
-    int read = Block_Read(current_block,count-total_read,to_read+total_read);
-    total_read += read;
+    int n_read = Block_Read(current_block,count-total_read,to_read+total_read);
+    total_read += n_read;
     current_block++;
   }
   
@@ -148,14 +167,28 @@ int Write_File(int inode_number, int offset, char* to_write)
 {
   // TODO assume inode_number is valid?
   Inode inode = Inode_Read(inode_number);
-  if(offset >= inode.File_Size)
+  if(offset > inode.File_Size)
   {
     debug("Attempted write exceeds file size");  
     return 0;
   }
 
-  // TODO implement this...
-  return (int)to_write;
+  // TODO assuming we ignore offset?
+  int total_write = 0;
+  int current_block = inode.Start_Block;
+  while(*(to_write+total_write) && current_block <= inode.End_Block)
+  {
+    int n_write = Block_Write(current_block,BLOCKSIZE,to_write+total_write);
+    total_write += n_write;
+    current_block++;
+  }
+
+  inode.File_Size += total_write;
+  Inode_Write(inode.Inode_Number,inode);
+
+  // TODO not updating superblock since blocks are allocated based on
+  // provided filesize
+  return total_write;
 }
 
 /* Closes the specified file and returns 1 if it was sucessfully
@@ -173,4 +206,131 @@ int Close_File(int inode_number)
 
   /* This file was already closed */
   return 0;
+}
+
+/* Attempt to find the specifid file in the directory structure,
+ * return 1 if success, -1 otherwise. */
+int Search_Directory(char* filename)
+{
+  int i;
+  for(i = 0; i < directory_size; i++)
+  {
+    if(strcmp(Directory_Structure[i].Filename,filename) == 0)
+      return 1;
+  }
+
+  return -1;
+}
+
+/* Attempt to add the specified file to the directory structure,
+ * return 1 if success, -1 otherwise. */
+int Add_to_Directory(char* filename, int inode_number)
+{
+  if(directory_size >= MAXFILES)
+  {
+    /* Directory is full */
+    debug("Could not add to directory, too many files");
+    return -1;
+  }
+
+  /* Add the new entry to the directory */
+  Directory dir_entry;
+  strcpy(dir_entry.Filename,filename);
+  dir_entry.Inode_Number = inode_number;
+  Directory_Structure[directory_size++] = dir_entry;
+  return 1;
+}
+
+/* Attempt to retrieve the specified Inode.
+ * Return the struct if success, or a dummy struct (Inode_Number == -1)
+ * otherwise. */
+Inode Inode_Read(int inode_number)
+{
+  if(inode_number >= inode_list_size)
+  {
+    /* Invalid inode index */
+    debug("Invalid inode number");
+    Inode bad_node = {.Inode_Number = -1};
+    return bad_node;
+  }
+
+  return Inode_List[inode_number];
+}
+
+/* Attempts to write the specified inode to the specified index,
+ * return 1 if success, -1 otherwise. */
+int Inode_Write(int inode_number, Inode input_inode)
+{
+  if(inode_number >= MAXFILES)
+  {
+    /* Invalid inode index */
+    debug("Invalid inode number");
+    return -1;
+  }
+
+  Inode_List[inode_number++] = input_inode;
+  return 1;
+}
+
+/* Read the specified number of bytes from the blocks and write
+ * it to the given string. Return the number of bytes read. */
+int Block_Read(int block_number, int num_bytes, char* to_read)
+{
+  if(block_number >= MAXBLOCKS)
+  {
+    debug("Invalid block number");
+    return -1;
+  }
+
+  char *block = Disk_Blocks[block_number];
+  int num_read = 0;
+
+  /* Read the specified number of bytes or until 
+   * we reach the end (max or null character) */
+  while(num_read < num_bytes && num_read < BLOCKSIZE)
+  {
+    if(block[num_read] == 0)
+      break;
+
+    to_read[num_read] = block[num_read];
+    num_read++;
+  }
+
+  return num_read;
+}
+
+/* Write the specified number of bytes to the blocks.
+ * Return the number of bytes written. */
+int Block_Write(int block_number, int num_bytes, char* to_write)
+{
+  if(block_number >= MAXBLOCKS)
+  {
+    debug("Invalid block number");
+    return -1;
+  }
+
+  char *block = Disk_Blocks[block_number];
+  int num_write = 0;
+
+  /* Write the specified number of bytes or until we reach the end */
+  while(num_write < num_bytes && num_write < BLOCKSIZE && to_write[num_write])
+  {
+    block[num_write] = to_write[num_write];
+    num_write++;
+  }
+
+  return num_write;
+}
+
+/* Get the superblock */
+Super_block Superblock_Read(void)
+{
+  return Superblock;
+}
+
+/* Set the superblock */
+int Superblock_Write(Super_block input_superblock)
+{
+  Superblock = input_superblock;
+  return 1;
 }

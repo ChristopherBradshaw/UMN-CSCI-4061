@@ -4,6 +4,7 @@
    test.c
 */
 
+#include "mini_filesystem.h"
 
 /* Test Helper Interface */
 void write_into_filesystem(char* input_directory, char *log_filename);
@@ -20,5 +21,11 @@ int main(int argc, char* argv[]){
                 Fill in the codes
         */  	
 
-        return 0;
+
+  Initialize_Filesystem("asdf");
+  Create_File("potato",5,5,4);
+  Open_File("potato");
+  printf("Wrote: %d\n",Write_File(0,0,"12345"));
+  print_memory();
+  return 0;
 }
