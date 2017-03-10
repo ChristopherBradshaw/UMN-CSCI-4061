@@ -9,10 +9,8 @@ Commentary=This program simulates a virtual in-memory filesystem
 #define MINI_FILESYSTEM_H
 
 #define MAXFILES 128
-//#define MAXBLOCKS 8192
-#define MAXBLOCKS 16
-//#define BLOCKSIZE 512
-#define BLOCKSIZE 8
+#define MAXBLOCKS 8192
+#define BLOCKSIZE 512
 
 typedef struct superblock
 {

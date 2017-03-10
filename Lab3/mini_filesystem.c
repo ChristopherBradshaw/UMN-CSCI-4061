@@ -170,7 +170,7 @@ int Read_File(int inode_number, int offset, int count, char* to_read)
     asprintf(&LOGSTR,"Failed to read %d bytes (INode %d, filesize %d)",
         offset+count,inode.Inode_Number,inode.File_Size);
     LOG(LOGSTR,INFO);
-    return 0;
+    return -1;
   }
 
   /* Attempt to read the specified number of bytes */
@@ -197,7 +197,7 @@ int Write_File(int inode_number, int offset, char* to_write)
   if(offset > inode.File_Size)
   {
     LOG("Attempted write exceeds file size", DEBUG);  
-    return 0;
+    return -1;
   }
 
   // TODO assuming we ignore offset?
@@ -222,8 +222,8 @@ int Write_File(int inode_number, int offset, char* to_write)
   return total_write;
 }
 
-/* Closes the specified file and returns 1 if it was sucessfully
- * closed and 0 if it was previously closed */
+/* Closes the specified file and returns 0 if it was sucessfully
+ * closed and -1 if it was previously closed */
 int Close_File(int inode_number)
 {
   Inode inode = Inode_Read(inode_number);
@@ -232,13 +232,13 @@ int Close_File(int inode_number)
   {
     inode.Flag = 0;  
     Inode_Write(inode_number,inode);
-    return 1;
+    asprintf(&LOGSTR,"Closed file (?,#%d)", inode.Inode_Number);
+    LOG(LOGSTR, INFO);
+    return 0;
   }
 
   /* This file was already closed */
-  asprintf(&LOGSTR,"Closed file (?,#%d)", inode.Inode_Number);
-  LOG(LOGSTR, INFO);
-  return 0;
+  return -1;
 }
 
 /* Attempt to find the specifid file in the directory structure,
