@@ -11,8 +11,8 @@ Commentary=This program simulates a virtual in-memory filesystem
 #define MAXFILES 128
 //#define MAXBLOCKS 8192
 #define MAXBLOCKS 16
-#define BLOCKSIZE 512
-#define DEBUG 1
+//#define BLOCKSIZE 512
+#define BLOCKSIZE 8
 
 typedef struct superblock
 {
@@ -62,7 +62,11 @@ int Write_File(int inode_number, int offset, char* to_write);
 int Close_File(int inode_number);
 
 /* Utility functions */
-void debug(char*);
+typedef enum LOG_LEVEL {NONE,INFO,DEBUG} log_level_t;
+log_level_t global_logging;
+
+void SET_LOG_LEVEL(log_level_t level);
+void LOG(char*, enum LOG_LEVEL);
 void print_memory(void);
 
 #endif
