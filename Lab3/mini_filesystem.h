@@ -25,6 +25,7 @@ typedef struct inode
     int User_Id;
     int Group_Id;
     int File_Size;
+    int Allocated_Size;
     int Start_Block;
     int End_Block;
     int Flag;
@@ -56,8 +57,9 @@ int Initialize_Filesystem(char* log_filename);
 int Create_File(char* filename, int UID, int GID, int filesize);
 int Open_File(char* filename);
 int Read_File(int inode_number, int offset, int count, char* to_read);
-int Write_File(int inode_number, int offset, char* to_write);
+int Write_File(int inode_number, int offset, int count, char* to_write);
 int Close_File(int inode_number);
+int Get_Filesize(int inode_number);
 
 /* Utility functions */
 typedef enum LOG_LEVEL {NONE,INFO,DEBUG} log_level_t;
@@ -66,5 +68,7 @@ log_level_t global_logging;
 void SET_LOG_LEVEL(log_level_t level);
 void LOG(char*, enum LOG_LEVEL);
 void print_memory(void);
+void print_directory(void);
+void print_inodes(void);
 
 #endif

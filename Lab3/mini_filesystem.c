@@ -44,13 +44,48 @@ void LOG(char *msg, log_level_t logging)
 
 void print_memory(void)
 {
+
+  fprintf(stderr,"----MEMORY-----\n");
   int i;
   for(i = 0; i < MAXBLOCKS; i++)
   {
-    printf("%d:|%s|\n",i,Disk_Blocks[i]);
+    //fprintf(stderr,"%d:|%s|\n",i,Disk_Blocks[i]);
+    char *block = Disk_Blocks[i];
+    fprintf(stderr,"%d:",i);
+    int j;
+    for(j = 0; j < BLOCKSIZE; j++)
+    {
+      fprintf(stderr,"%d,",block[j]);
+    }
+    fprintf(stderr,"\n");
   }
+  fprintf(stderr,"---------------\n");
 }
 
+void print_directory(void)
+{
+  fprintf(stderr,"---DIRECTORY---\n");
+  int i;
+  for(i = 0; i < directory_size; i++)
+  {
+    Directory tmp = Directory_Structure[i];
+    fprintf(stderr,"File: %s:%d\n",tmp.Filename,tmp.Inode_Number);
+  }
+  fprintf(stderr,"---------------\n");
+}
+
+void print_inodes(void)
+{
+  fprintf(stderr,"-----INODES----\n");
+  int i;
+  for(i = 0; i < inode_list_size; i++)
+  {
+    Inode tmp = Inode_List[i];
+    fprintf(stderr,"Inode: (#:%d,Size:%d,MaxSize:%d,Start:%d,End:%d)\n",tmp.Inode_Number,
+        tmp.File_Size,tmp.Allocated_Size,tmp.Start_Block,tmp.End_Block);
+  }
+  fprintf(stderr,"---------------\n");
+}
 
 /* Filesystem interface definitions */
 
@@ -84,6 +119,9 @@ int Create_File(char* filename, int UID, int GID, int filesize)
     return -1;
   }
   
+  asprintf(&LOGSTR,"Attempted to create file %s with size %d",filename,filesize);
+  LOG(LOGSTR,DEBUG);
+
   /* Construct the new Inode entry */
   Inode new_inode = 
   {
@@ -91,14 +129,15 @@ int Create_File(char* filename, int UID, int GID, int filesize)
     .User_Id = UID,
     .Group_Id = GID,
     .File_Size = 0,
+    .Allocated_Size = filesize,
     .Start_Block = Superblock_Read().next_free_block,
     .End_Block = Superblock_Read().next_free_block 
       + (int) ceil((float)filesize / BLOCKSIZE) - 1,
     .Flag = 0,
   };
   
-  asprintf(&LOGSTR,"Created INode: (#%d,Start:%d,End:%d)", new_inode.Inode_Number, new_inode.Start_Block,
-      new_inode.End_Block);
+  asprintf(&LOGSTR,"Created INode: (#%d,Start:%d,End:%d)", 
+      new_inode.Inode_Number, new_inode.Start_Block, new_inode.End_Block);
   LOG(LOGSTR,INFO);
 
   /* Put the entry in the INode table */
@@ -118,6 +157,8 @@ int Create_File(char* filename, int UID, int GID, int filesize)
     return -1;
   } 
 
+  inode_list_size++;
+
   /* Update the superblock */
   Super_block new_sb = 
   {
@@ -126,7 +167,7 @@ int Create_File(char* filename, int UID, int GID, int filesize)
   };
   Superblock_Write(new_sb);
   
-  asprintf(&LOGSTR,"Created file (%s,#%d)",filename, inode_idx);
+  asprintf(&LOGSTR,"Created file (%s,#%d,%d bytes)",filename, inode_idx, filesize);
   LOG(LOGSTR, INFO);
   return inode_idx;
 }
@@ -151,6 +192,15 @@ int Open_File(char* filename)
   LOG(LOGSTR, DEBUG);
 
   Inode inode = Inode_Read(inode_idx);
+
+  /* Make sure this Inode is valid */
+  if(inode.Inode_Number == -1)
+  {
+    asprintf(&LOGSTR,"Failed to fetch Inode %d", inode_idx);
+    LOG(LOGSTR,INFO);
+    return -1;
+  }
+
   inode.Flag = 1;  
   Inode_Write(inode_idx,inode);
 
@@ -163,8 +213,17 @@ int Open_File(char* filename)
  * of bytes successfully read */
 int Read_File(int inode_number, int offset, int count, char* to_read)
 {
-  // TODO assume inode_number is valid?
   Inode inode = Inode_Read(inode_number);
+
+  /* Make sure this Inode is valid */
+  if(inode.Inode_Number == -1)
+  {
+    asprintf(&LOGSTR,"Failed to fetch Inode %d", inode_number);
+    LOG(LOGSTR,INFO);
+    return -1;
+  }
+
+  remove("read_log");
   if(offset+count > inode.File_Size)
   {
     asprintf(&LOGSTR,"Failed to read %d bytes (INode %d, filesize %d)",
@@ -190,11 +249,20 @@ int Read_File(int inode_number, int offset, int count, char* to_read)
 
 /* Attempts to write the contents of to_write into the 
  * data blocks for this Inode */
-int Write_File(int inode_number, int offset, char* to_write)
+int Write_File(int inode_number, int offset, int count, char* to_write)
 {
-  // TODO assume inode_number is valid?
   Inode inode = Inode_Read(inode_number);
-  if(offset > inode.File_Size)
+  remove("write_log");
+
+  /* Make sure this Inode is valid */
+  if(inode.Inode_Number == -1)
+  {
+    asprintf(&LOGSTR,"Failed to fetch Inode %d", inode_number);
+    LOG(LOGSTR,INFO);
+    return -1;
+  }
+
+  if(offset+count > inode.Allocated_Size)
   {
     LOG("Attempted write exceeds file size", DEBUG);  
     return -1;
@@ -203,9 +271,9 @@ int Write_File(int inode_number, int offset, char* to_write)
   // TODO assuming we ignore offset?
   int total_write = 0;
   int current_block = inode.Start_Block;
-  while(*(to_write+total_write) && current_block <= inode.End_Block)
+  while(current_block <= inode.End_Block && total_write < count)
   {
-    int n_write = Block_Write(current_block,BLOCKSIZE,to_write+total_write);
+    int n_write = Block_Write(current_block,count-total_write,to_write+total_write);
     total_write += n_write;
     current_block++;
   }
@@ -227,6 +295,15 @@ int Write_File(int inode_number, int offset, char* to_write)
 int Close_File(int inode_number)
 {
   Inode inode = Inode_Read(inode_number);
+
+  /* Make sure this Inode is valid */
+  if(inode.Inode_Number == -1)
+  {
+    asprintf(&LOGSTR,"Failed to fetch Inode %d", inode_number);
+    LOG(LOGSTR,INFO);
+    return -1;
+  }
+
   /* This file is open */
   if(inode.Flag == 1)
   {
@@ -239,6 +316,22 @@ int Close_File(int inode_number)
 
   /* This file was already closed */
   return -1;
+}
+
+/* Return the filesize for this inode, or -1 if it isn't valid */
+int Get_Filesize(int inode_number)
+{
+  Inode inode = Inode_Read(inode_number);
+
+  /* Make sure this Inode is valid */
+  if(inode.Inode_Number == -1)
+  {
+    asprintf(&LOGSTR,"Failed to fetch Inode %d", inode_number);
+    LOG(LOGSTR,INFO);
+    return -1;
+  }
+
+  return inode.File_Size;
 }
 
 /* Attempt to find the specifid file in the directory structure,
@@ -303,10 +396,10 @@ int Inode_Write(int inode_number, Inode input_inode)
     return -1;
   }
 
-  asprintf(&LOGSTR, "Wrote INode: %d %d",inode_number, input_inode.File_Size);
+  asprintf(&LOGSTR, "Wrote INode: #%d",inode_number);
   LOG(LOGSTR,DEBUG);
   Inode_List[inode_number] = input_inode;
-  return inode_list_size++;
+  return inode_number;
 }
 
 /* Read the specified number of bytes from the blocks and write
@@ -326,9 +419,6 @@ int Block_Read(int block_number, int num_bytes, char* to_read)
    * we reach the end (max or null character) */
   while(num_read < num_bytes && num_read < BLOCKSIZE)
   {
-    if(block[num_read] == 0)
-      break;
-
     to_read[num_read] = block[num_read];
     num_read++;
   }
@@ -340,6 +430,7 @@ int Block_Read(int block_number, int num_bytes, char* to_read)
  * Return the number of bytes written. */
 int Block_Write(int block_number, int num_bytes, char* to_write)
 {
+  /* Make sure this block number is valid */
   if(block_number >= MAXBLOCKS)
   {
     LOG("Invalid block number", INFO);
@@ -350,7 +441,7 @@ int Block_Write(int block_number, int num_bytes, char* to_write)
   int num_write = 0;
 
   /* Write the specified number of bytes or until we reach the end */
-  while(num_write < num_bytes && num_write < BLOCKSIZE && to_write[num_write])
+  while(num_write < num_bytes && num_write < BLOCKSIZE)
   {
     block[num_write] = to_write[num_write];
     num_write++;

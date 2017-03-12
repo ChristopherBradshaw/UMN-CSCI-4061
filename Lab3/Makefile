@@ -1,7 +1,7 @@
 all: lib test
 
 lib: mini_filesystem.c mini_filesystem.h
-	gcc -c mini_filesystem.c
+	gcc -c -g mini_filesystem.c
 	ar -cvq libfstest.a mini_filesystem.o
 	rm mini_filesystem.o
 
