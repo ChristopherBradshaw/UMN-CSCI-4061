@@ -17,12 +17,13 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 /* Test Helper Interface */
 void write_into_filesystem(char* input_directory, char *log_filename);
 void make_filesystem_summary(char* filename);
 void read_images_from_filesystem_and_write_to_output_directory(char* output_directory);
-void generate_html_file(char* filename);
+void generate_html_file(char* dir, char* html_filename);
 
 void some_tests(void);
 /* Main function */
@@ -40,16 +41,24 @@ int main(int argc, char* argv[])
   write_into_filesystem(argv[1],argv[3]);
   make_filesystem_summary("summary");
   read_images_from_filesystem_and_write_to_output_directory(argv[2]);
-  /*
-  print_directory();
-  print_inodes();
-  print_memory(); 
-  */
+  generate_html_file(argv[2],"filesystem_content.html");
   return 0;
 }
 
-/*  Returns a new file name string without the extension (ex: a.jpg -> a) */
-const char *get_file_name_no_ext(const char* mystr)
+/* Return the file extension (ex: a.jpg -> jpg) */
+char* get_file_type(char *f_name)
+{
+	char *tmp = strrchr(f_name,'.');
+		
+	/* Doesn't have an extension */
+	if(tmp == NULL)
+		return NULL;
+				
+	return tmp+1; 
+}
+
+/* Returns a new file name string without the extension (ex: a.jpg -> a) */
+char *get_file_name_no_ext(char* mystr)
 {
 		char *retstr;
 		char *lastdot;
@@ -63,19 +72,8 @@ const char *get_file_name_no_ext(const char* mystr)
 				*lastdot = '\0';
 		return retstr;
 }
-
-/* Return the file extension (ex: a.jpg -> jpg) */
-char* get_file_type(char *f_name)
-{
-	char *tmp = strrchr(f_name,'.');
-		
-	/* Doesn't have an extension */
-	if(tmp == NULL)
-		return NULL;
-				
-	return tmp+1; 
-}   
-
+ 
+/* Copy the specified file to the virtual filesystem */
 int write_single_file(char *filename)
 {
   char *buffer = NULL;
@@ -102,7 +100,7 @@ int write_single_file(char *filename)
 
 	if (buffer)
 	{
-    /* Only write the basename to the directory structure (ex: a.txt), 
+    /* Only write the basename to the directory structure (not the full path),
      * then write the buffer contents to our virtual filesystem */
     char *f_basename = basename(filename);
     int inode_idx;
@@ -112,7 +110,6 @@ int write_single_file(char *filename)
       return -1;
     }
 
-    buffer[length] = 0;
     Write_File(inode_idx,0,length,buffer);
     free(buffer);
 	}
@@ -159,20 +156,20 @@ void traverse_input_dir(char *name, int level)
 
 void reset_file(char *filename)
 {
-  /* Create the log file */
+  /* Remove the file if it already exists */
   if(access(filename,F_OK) != -1) 
     remove(filename);
 
+  /* Now create it */
   int fd;
   if((fd = open(filename, O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO)) == -1)
   {
     fprintf(stderr,"Failed to create file: %s\n",filename);
     return; 
   }
+
   close(fd);
-
 }
-
 
 /* Set up the log file, recursively traverse the input directory, adding
  * every file we find into our virtual filesystem */
@@ -241,54 +238,85 @@ void read_images_from_filesystem_and_write_to_output_directory(char* output_dire
 
     char *buffer = malloc(filesize);
     int n_read = Read_File(inode_idx,0,filesize,buffer);
-    
+
+    /* Determine the filepath, clear it if it already exists */
     char *dst; 
     asprintf(&dst,"%s/%s",output_directory,dir_entry.Filename);
-
     if(access(dst,F_OK) != -1)
       remove(dst);
 
+    /* Write the contents of the buffer into the file */
     FILE *f = fopen(dst,"ab+");
     int j;
     for(j = 0; j < n_read; j++)
     {
       fprintf(f,"%c",buffer[j]);
     }
+
     fclose(f);
     Close_File(inode_idx);
   }
 }
 
-void generate_html_file(char* filename)
+/* Restarts wait if interrupted by a signal (Robbins pg. 72) */
+pid_t r_wait(int *stat_loc)
 {
-
+	int retval;
+	while(((retval = wait(stat_loc)) == -1) && (errno == EINTR)) ;
+	return retval;
 }
 
-void some_tests()
+void generate_html_file(char* dir, char* html_filename)
 {
-  SET_LOG_LEVEL(DEBUG);
+	DIR *input_dp;
+	struct dirent *input_ep;
+	input_dp = opendir(dir);
 
-  Initialize_Filesystem("asdf");
+  /* Remove the HTML file if it already exists */
+  if(access(html_filename,F_OK) != -1)
+    remove(html_filename);  
 
-  Create_File("potato",5,5,32);
-  Create_File("test",5,5,6);
-  Create_File("test2",5,5,6);
-  Create_File("test3",5,5,26);
-  Create_File("test4",5,5,8);
-  
-  /*
-  Write_File(0,0,"01234567890123456789testpassluck");
-  Write_File(1,0,"abcd&&");
-  Write_File(2,0,"test^^");
-  Write_File(3,0,"abcdefghijklmnopqrstuvwxyz");
-  Write_File(4,0,"thisxxyy");
-  */
+  FILE *html = fopen(html_filename,"ab+");
+	if(input_dp != NULL)
+	{ 
+    fprintf(html,"<html>\n\t<head>\n\t\t<title>Images</title>\n\t</head>\n\t<body>");
+    while((input_ep = readdir(input_dp)))
+		{ 
+			/* Skip over files like . and .. AND skip over thumbnail images */
+			if(input_ep->d_type != DT_REG || strstr(input_ep->d_name,"_thumb"))
+				continue;
+			
+      /* Make sure we're dealing with a jpg */
+			char *type = (char *) get_file_type(input_ep->d_name);
+      if(strcmp(type,"jpg") != 0)
+        continue;
+		  
+      char *src;
+      asprintf(&src,"%s/%s",dir,input_ep->d_name);
+      char *dst;
+      asprintf(&dst,"%s/%s_thumb.jpg",dir,get_file_name_no_ext(input_ep->d_name));
 
-  char buf[256];
-  int i;
-  for(i = 0; i < 5; i++)
-  {
-    if(Read_File(i,0,8,buf))
-      printf("BUF:|%s|\n",buf);
-  }
+      if(fork() != 0)
+      {
+        /* We're the parent, build on the HTML */
+        fprintf(html,"\n\t\t\t<a href=\"%s\">\n",src);
+        fprintf(html,"\t\t\t<img src=\"%s\"/></a>\n",dst);
+      }
+      else
+      {
+        /* We're the child, convert this file */
+        execlp("convert","convert","-resize","200x200",src,dst,NULL);
+      }
+
+		}
+    fprintf(html,"\t</body>\n</html>");
+	}
+	else
+	{ 
+		perror("Could not read input directory");
+	}
+
+  /* Wait for all children to finish conversion */
+  while(r_wait(NULL) > 0) ;
+  fclose(html);
 }

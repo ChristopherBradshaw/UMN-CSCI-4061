@@ -49,15 +49,7 @@ void print_memory(void)
   int i;
   for(i = 0; i < MAXBLOCKS; i++)
   {
-    //fprintf(stderr,"%d:|%s|\n",i,Disk_Blocks[i]);
-    char *block = Disk_Blocks[i];
-    fprintf(stderr,"%d:",i);
-    int j;
-    for(j = 0; j < BLOCKSIZE; j++)
-    {
-      fprintf(stderr,"%d,",block[j]);
-    }
-    fprintf(stderr,"\n");
+    fprintf(stderr,"%d:|%s|\n",i,Disk_Blocks[i]);
   }
   fprintf(stderr,"---------------\n");
 }
