@@ -7,5 +7,5 @@ Modifications from project specifications:
     Image files have null characters all over the place)
 
 Note: 
-- Log files, summaries and HTML files are output in the root project directory.
+- Log files, summaries and HTML files are output in the working directory.
 - Images (original & thumbnails) are placed in the specified output directory.

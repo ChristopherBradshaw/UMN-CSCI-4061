@@ -60,6 +60,8 @@ int Read_File(int inode_number, int offset, int count, char* to_read);
 int Write_File(int inode_number, int offset, int count, char* to_write);
 int Close_File(int inode_number);
 int Get_Filesize(int inode_number);
+int Get_UID(int inode_number);
+int Get_GID(int inode_number);
 
 /* Utility functions */
 typedef enum LOG_LEVEL {NONE,LOG_FILE,INFO,DEBUG} log_level_t;

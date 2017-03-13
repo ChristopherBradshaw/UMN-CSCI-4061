@@ -143,23 +143,23 @@ void traverse_input_dir(char *name, int level)
 
   do
   {
-      if (entry->d_type == DT_DIR)
-      {
-        /* This is a directory */
-        char path[1024];
-        int len = snprintf(path, sizeof(path)-1, "%s/%s", name, entry->d_name);
-        path[len] = 0;
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-            continue;
-        traverse_input_dir(path, level + 1);
-      }
-      else
-      {
-        /* This is a file, write it to our filesystem */
-        char *tmp;
-        asprintf(&tmp,"%s/%s",name,entry->d_name);
-        write_single_file(tmp);
-      }
+    if (entry->d_type == DT_DIR)
+    {
+      /* This is a directory */
+      char path[1024];
+      int len = snprintf(path, sizeof(path)-1, "%s/%s", name, entry->d_name);
+      path[len] = 0;
+      if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+          continue;
+      traverse_input_dir(path, level + 1);
+    }
+    else
+    {
+      /* This is a file, write it to our filesystem */
+      char *tmp;
+      asprintf(&tmp,"%s/%s",name,entry->d_name);
+      write_single_file(tmp);
+    }
   } while ((entry = readdir(dir)));
   closedir(dir);
 }
@@ -246,6 +246,11 @@ void read_images_from_filesystem_and_write_to_output_directory(char* output_dire
 
     /* Get filesize so we know how many bytes to read */
     int filesize = Get_Filesize(inode_idx);
+
+    /* Get the UID/GID of the file so we can set it in the new file */
+    int uid = Get_UID(inode_idx);
+    int gid = Get_GID(inode_idx);
+
     if(filesize == -1)
     {
       fprintf(stderr,"Failed to get filesize for %s\n",dir_entry.Filename);
@@ -266,13 +271,16 @@ void read_images_from_filesystem_and_write_to_output_directory(char* output_dire
     if(!f)
     {
       perror("Failed to open file");
+      continue;
     }
+
     int j;
     for(j = 0; j < n_read; j++)
     {
       fprintf(f,"%c",buffer[j]);
     }
 
+    chown(dir_entry.Filename,uid,gid);
     fclose(f);
     Close_File(inode_idx);
   }

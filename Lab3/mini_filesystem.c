@@ -347,6 +347,36 @@ int Get_Filesize(int inode_number)
   return inode.File_Size;
 }
 
+int Get_UID(int inode_number)
+{
+  Inode inode = Inode_Read(inode_number);
+
+  /* Make sure this Inode is valid */
+  if(inode.Inode_Number == -1)
+  {
+    asprintf(&LOGSTR,"Failed to fetch Inode %d", inode_number);
+    LOG(LOGSTR,INFO);
+    return -1;
+  }
+
+  return inode.User_Id;
+}
+
+int Get_GID(int inode_number)
+{
+  Inode inode = Inode_Read(inode_number);
+
+  /* Make sure this Inode is valid */
+  if(inode.Inode_Number == -1)
+  {
+    asprintf(&LOGSTR,"Failed to fetch Inode %d", inode_number);
+    LOG(LOGSTR,INFO);
+    return -1;
+  }
+
+  return inode.Group_Id;
+}
+
 /* Attempt to find the specifid file in the directory structure,
  * return the inode if success, -1 otherwise. */
 int Search_Directory(char* filename)
