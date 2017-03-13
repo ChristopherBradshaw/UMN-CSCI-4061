@@ -14,6 +14,8 @@ Commentary=This program simulates a virtual in-memory filesystem
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 
 /* Filesystem call declarations */
 
@@ -36,7 +38,26 @@ void SET_LOG_LEVEL(log_level_t level)
 
 void LOG(char *msg, log_level_t logging)
 {
-  if(global_logging >= INFO && logging == INFO)
+  if(logging == LOG_FILE)
+  {
+    FILE *log_file = fopen(Log_Filename,"ab+");
+    if(log_file)
+    {
+      struct timeval tv;
+      gettimeofday(&tv,NULL);
+      time_t now;
+      struct tm *t;
+      now = time(NULL);
+      t = localtime(&now);
+      fprintf(log_file,"%d:%d:%d:%ld %s\n",t->tm_hour,t->tm_min, t->tm_sec,tv.tv_usec,msg);
+      fclose(log_file);
+    }
+    else
+    {
+      perror("Could not open log file");
+    }
+  }
+  else if(global_logging >= INFO && logging == INFO)
     fprintf(stderr,"INFO: %s\n",msg);
   else if(global_logging >= DEBUG && logging == DEBUG)
     fprintf(stderr,"DEBUG: %s\n",msg);
@@ -330,6 +351,9 @@ int Get_Filesize(int inode_number)
  * return the inode if success, -1 otherwise. */
 int Search_Directory(char* filename)
 {
+  LOG("Directory READ",LOG_FILE);
+  Count++;
+
   int i;
   for(i = 0; i < directory_size; i++)
   {
@@ -343,7 +367,7 @@ int Search_Directory(char* filename)
 /* Attempt to add the specified file to the directory structure,
  * return 1 if success, -1 otherwise. */
 int Add_to_Directory(char* filename, int inode_number)
-{
+{ 
   if(directory_size >= MAXFILES)
   {
     /* Directory is full */
@@ -356,6 +380,8 @@ int Add_to_Directory(char* filename, int inode_number)
   strcpy(dir_entry.Filename,filename);
   dir_entry.Inode_Number = inode_number;
   Directory_Structure[directory_size++] = dir_entry;
+  LOG("Directory WRITE",LOG_FILE);
+  Count++;
   return 1;
 }
 
@@ -374,6 +400,8 @@ Inode Inode_Read(int inode_number)
 
   asprintf(&LOGSTR,"Reading INode: %d",inode_number);
   LOG(LOGSTR,DEBUG);
+  LOG("INode READ",LOG_FILE);
+  Count++;
   return Inode_List[inode_number];
 }
 
@@ -391,6 +419,8 @@ int Inode_Write(int inode_number, Inode input_inode)
   asprintf(&LOGSTR, "Wrote INode: #%d",inode_number);
   LOG(LOGSTR,DEBUG);
   Inode_List[inode_number] = input_inode;
+  LOG("INode WRITE",LOG_FILE);
+  Count++;
   return inode_number;
 }
 
@@ -415,6 +445,8 @@ int Block_Read(int block_number, int num_bytes, char* to_read)
     num_read++;
   }
 
+  LOG("Block READ",LOG_FILE);
+  Count++;
   return num_read;
 }
 
@@ -439,12 +471,16 @@ int Block_Write(int block_number, int num_bytes, char* to_write)
     num_write++;
   }
 
+  LOG("Block WRITE",LOG_FILE);
+  Count++;
   return num_write;
 }
 
 /* Get the superblock */
 Super_block Superblock_Read(void)
 {
+  LOG("Superblock READ",LOG_FILE);
+  Count++;
   return Superblock;
 }
 
@@ -452,5 +488,7 @@ Super_block Superblock_Read(void)
 int Superblock_Write(Super_block input_superblock)
 {
   Superblock = input_superblock;
+  LOG("Superblock WRITE",LOG_FILE);
+  Count++;
   return 1;
 }

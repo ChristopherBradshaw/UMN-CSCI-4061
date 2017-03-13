@@ -1,1 +1,11 @@
-Added UID and GID to Create_File
+
+Modifications from project specifications:
+- Added UID, GID, and (max) filesize to Create_File
+
+- Write_File takes in a count (number of bytes to write) 
+    (otherwise, how would it know when to stop writing? 
+    Image files have null characters all over the place)
+
+Note: 
+- Log files, summaries and HTML files are output in the root project directory.
+- Images (original & thumbnails) are placed in the specified output directory.

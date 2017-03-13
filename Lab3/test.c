@@ -25,7 +25,6 @@ void make_filesystem_summary(char* filename);
 void read_images_from_filesystem_and_write_to_output_directory(char* output_directory);
 void generate_html_file(char* dir, char* html_filename);
 
-void some_tests(void);
 /* Main function */
 int main(int argc, char* argv[])
 {
@@ -34,14 +33,15 @@ int main(int argc, char* argv[])
   if(argc != 4)
   {
     fprintf(stderr,"USAGE: %s <input_dir> <output_dir> <log_filename>\n",argv[0]);
-    return -1;
+    return 1;
   }
   
-  SET_LOG_LEVEL(INFO);
+  SET_LOG_LEVEL(NONE);
   write_into_filesystem(argv[1],argv[3]);
   make_filesystem_summary("summary");
   read_images_from_filesystem_and_write_to_output_directory(argv[2]);
   generate_html_file(argv[2],"filesystem_content.html");
+  printf("Program completed with %d accesses\n",Count);
   return 0;
 }
 
@@ -94,7 +94,7 @@ int write_single_file(char *filename)
 	}
   else
   {
-    fprintf(stderr,"Failed to read: %s\n",filename);
+    perror("Failed to read file");
     return -1;
   }
 
@@ -103,8 +103,10 @@ int write_single_file(char *filename)
     /* Only write the basename to the directory structure (not the full path),
      * then write the buffer contents to our virtual filesystem */
     char *f_basename = basename(filename);
+    struct stat st;
+    stat(filename,&st);
     int inode_idx;
-    if((inode_idx = Create_File(f_basename,5,5,length)) == -1)
+    if((inode_idx = Create_File(f_basename,st.st_uid,st.st_gid,length)) == -1)
     {
       fprintf(stderr,"Failed to create %s. Does it already exist?\n",f_basename);
       return -1;
@@ -129,12 +131,20 @@ void traverse_input_dir(char *name, int level)
   struct dirent *entry;
 
   if (!(dir = opendir(name)))
-      return;
+  {
+    perror("Failed to open dir");
+    return;
+  }
   if (!(entry = readdir(dir)))
-      return;
+  {
+    perror("Failed to read dir");
+    return;
+  }
 
-  do {
-      if (entry->d_type == DT_DIR) {
+  do
+  {
+      if (entry->d_type == DT_DIR)
+      {
         /* This is a directory */
         char path[1024];
         int len = snprintf(path, sizeof(path)-1, "%s/%s", name, entry->d_name);
@@ -164,7 +174,7 @@ void reset_file(char *filename)
   int fd;
   if((fd = open(filename, O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO)) == -1)
   {
-    fprintf(stderr,"Failed to create file: %s\n",filename);
+    perror("Failed to create file");
     return; 
   }
 
@@ -183,7 +193,13 @@ void write_into_filesystem(char *input_directory, char *log_filename)
 void make_filesystem_summary(char* filename)
 {
   reset_file(filename);
-  FILE *out = fopen(filename,"w");
+  FILE *out;
+  if((out = fopen(filename,"w")) == 0)
+  {
+    perror("Failed to open file"); 
+    return;
+  }
+
 	int i;
   for(i = 0; i < directory_size; i++)
   {
@@ -247,6 +263,10 @@ void read_images_from_filesystem_and_write_to_output_directory(char* output_dire
 
     /* Write the contents of the buffer into the file */
     FILE *f = fopen(dst,"ab+");
+    if(!f)
+    {
+      perror("Failed to open file");
+    }
     int j;
     for(j = 0; j < n_read; j++)
     {

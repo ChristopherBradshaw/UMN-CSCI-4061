@@ -62,7 +62,7 @@ int Close_File(int inode_number);
 int Get_Filesize(int inode_number);
 
 /* Utility functions */
-typedef enum LOG_LEVEL {NONE,INFO,DEBUG} log_level_t;
+typedef enum LOG_LEVEL {NONE,LOG_FILE,INFO,DEBUG} log_level_t;
 log_level_t global_logging;
 
 void SET_LOG_LEVEL(log_level_t level);
