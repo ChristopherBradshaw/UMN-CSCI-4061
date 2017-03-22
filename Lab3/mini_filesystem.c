@@ -224,7 +224,7 @@ int Open_File(char* filename)
 
 /* Attempts to read this Inode into to_read and returns the number
  * of bytes successfully read */
-int Read_File(int inode_number, int offset, int count, char* to_read)
+int Read_File(int inode_number, int count, char* to_read)
 {
   Inode inode = Inode_Read(inode_number);
 
@@ -237,10 +237,10 @@ int Read_File(int inode_number, int offset, int count, char* to_read)
   }
 
   remove("read_log");
-  if(offset+count > inode.File_Size)
+  if(count > inode.File_Size)
   {
     asprintf(&LOGSTR,"Failed to read %d bytes (INode %d, filesize %d)",
-        offset+count,inode.Inode_Number,inode.File_Size);
+        count,inode.Inode_Number,inode.File_Size);
     LOG(LOGSTR,INFO);
     return -1;
   }
@@ -262,7 +262,7 @@ int Read_File(int inode_number, int offset, int count, char* to_read)
 
 /* Attempts to write the contents of to_write into the 
  * data blocks for this Inode */
-int Write_File(int inode_number, int offset, int count, char* to_write)
+int Write_File(int inode_number, int count, char* to_write)
 {
   Inode inode = Inode_Read(inode_number);
   remove("write_log");
@@ -275,13 +275,12 @@ int Write_File(int inode_number, int offset, int count, char* to_write)
     return -1;
   }
 
-  if(offset+count > inode.Allocated_Size)
+  if(count > inode.Allocated_Size)
   {
     LOG("Attempted write exceeds file size", DEBUG);  
     return -1;
   }
 
-  // TODO assuming we ignore offset?
   int total_write = 0;
   int current_block = inode.Start_Block;
   while(current_block <= inode.End_Block && total_write < count)
@@ -293,9 +292,6 @@ int Write_File(int inode_number, int offset, int count, char* to_write)
 
   inode.File_Size += total_write;
   Inode_Write(inode.Inode_Number,inode);
-
-  // TODO not updating superblock since blocks are allocated based on
-  // provided filesize
 
   asprintf(&LOGSTR,"Wrote %d bytes to file (?,#%d) New size: %d",total_write, 
       inode.Inode_Number, inode.File_Size);

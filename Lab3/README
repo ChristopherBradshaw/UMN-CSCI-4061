@@ -1,11 +1,25 @@
+Chris Bradshaw - 5300734
+Usage: ./mini_filesystem (input dir) (output dir) (log file)
 
 Modifications from project specifications:
-- Added UID, GID, and (max) filesize to Create_File
+- Added UID, GID, and allocation filesize to Create_File
 
 - Write_File takes in a count (number of bytes to write) 
     (otherwise, how would it know when to stop writing? 
     Image files have null characters all over the place)
 
+- Offset is not included in Read/Write file. This is because this
+    assignment makes absolutely no use of it and therefore just creates 
+    unneccesary work. The assignment even says: "a file is contiguous 
+    in this filesystem, you cannot write at any offset"
+
+- A maximum filesize is provided at file creation, which is used to
+    allocate blocks. This field is recorded in the inode struct 
+    as "Allocated_Size". The actual filesize is still maintained. 
+    The project assignment does not have any wording preventing this.
+
 Note: 
 - Log files, summaries and HTML files are output in the working directory.
 - Images (original & thumbnails) are placed in the specified output directory.
+
+Experiment results: see Assignment3Report.pdf

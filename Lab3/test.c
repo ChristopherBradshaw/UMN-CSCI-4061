@@ -112,7 +112,7 @@ int write_single_file(char *filename)
       return -1;
     }
 
-    Write_File(inode_idx,0,length,buffer);
+    Write_File(inode_idx,length,buffer);
     free(buffer);
 	}
   else
@@ -258,7 +258,7 @@ void read_images_from_filesystem_and_write_to_output_directory(char* output_dire
     }
 
     char *buffer = malloc(filesize);
-    int n_read = Read_File(inode_idx,0,filesize,buffer);
+    int n_read = Read_File(inode_idx,filesize,buffer);
 
     /* Determine the filepath, clear it if it already exists */
     char *dst; 
