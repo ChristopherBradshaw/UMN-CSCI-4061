@@ -10,6 +10,11 @@ Commentary=This program manages image files
 
 #include <time.h>
 #include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define LOG_FILE "catalog.log"
+#define OUTPUT_FILE "output.log"
 
 typedef struct filestruct {
   int FileId; 
@@ -20,5 +25,35 @@ typedef struct filestruct {
   pthread_t ThreadId;
 } file_struct_t;
 
+typedef enum variant {
+  V1,V2,V3
+} variant_t;
+
+/* -------------- Data -------------- */
+
+/* File pointer to log file */
+FILE *log_file;
+
+/* File pointer to ouput file */
+FILE *output_file;
+
+/* Input directory containing image files/subdirectories */
+const char *input_dir;
+
+/* Output directory where we place HTML file */
+const char *output_dir; 
+
+/* ----------- FUNCTIONS ------------ */
+
+/* Traverses input directory (using a method specified by the variant).
+ * Builds HTML file and handles logging. 
+ * Return zero for success, non-zero for failure. */
+int run_variant(variant_t variant);
+
+/* Write to output file, must be thread safe */
+void write_output(const char *str);
+
+/* Write to log file, must be thread safe */
+void write_log(const char *str);
 
 #endif
