@@ -13,8 +13,10 @@ Commentary=This program manages image files
 #include <stdio.h>
 #include <stdlib.h>
 
+#define HTML_FILE "catalog.html"
 #define LOG_FILE "catalog.log"
 #define OUTPUT_FILE "output.log"
+#define MAX_SUBDIRS 128
 
 typedef struct filestruct {
   int FileId; 
@@ -37,6 +39,9 @@ FILE *log_file;
 /* File pointer to ouput file */
 FILE *output_file;
 
+/* File pointer to HTML file */
+FILE *html_file;
+
 /* Input directory containing image files/subdirectories */
 const char *input_dir;
 
@@ -55,5 +60,14 @@ void write_output(const char *str);
 
 /* Write to log file, must be thread safe */
 void write_log(const char *str);
+
+/* Initialize the HTML file */
+void init_html();
+
+/* Write entry to HTML file */
+void write_html(const file_struct_t *file);
+
+/* Complete and close the HTML file */
+void finish_html();
 
 #endif

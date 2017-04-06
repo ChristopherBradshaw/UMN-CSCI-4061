@@ -17,6 +17,7 @@ Commentary=This program manages image files
 
 /* Utility functions */
 int read_dir(const char *dir_name);
+const char *get_file_type(const char *f);
 
 /* Thread subroutines */
 void *do_v1(void *dir);
@@ -93,7 +94,6 @@ int run_variant(variant_t variant) {
     case V1:
       write_output("Variant 1");
       pthread_create(&parent_thread,NULL,do_v1,(void *)input_dir);
-      write_output("Thread created");
       break;
     case V2:
       write_output("Variant 2");
@@ -140,9 +140,14 @@ void *do_v1(void *input_dir) {
   struct dirent *entry;
   const char *name = (char*)input_dir;
   char *tmp;
-  asprintf(&tmp,"Found dir: %s",name);
-  write_output(tmp);
-  fprintf(stderr,"Found dir: %s\n",name);
+
+  // TODO -- assume MAX_SUBDIRS?
+  pthread_t subdir_threads[MAX_SUBDIRS];
+  int cur_subdir_thread = 0;
+
+  // TODO remove this
+  //asprintf(&tmp,"Found dir: %s",name);
+  //write_output(tmp);
 
   if (!(dir = opendir(name))) {
     perror("Failed to open dir");
@@ -155,22 +160,36 @@ void *do_v1(void *input_dir) {
 
   do {
     if (entry->d_type == DT_DIR) {
+      if(cur_subdir_thread >= MAX_SUBDIRS) {
+        asprintf(&tmp, "ERROR: Exceeded %d subdirectories in %s",MAX_SUBDIRS,name);
+        write_output(tmp);
+        break;
+      }
+
       /* This is a directory */
       char *path; 
       asprintf(&path,"%s/%s",name,entry->d_name);
       if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
           continue;
-
-			pthread_t new_thread;
-      pthread_create(&new_thread,NULL,do_v1,(void *)path);
-      pthread_detach(new_thread);
+      pthread_create(&subdir_threads[cur_subdir_thread++],NULL,do_v1,(void *)path);
     } else {
-      /* This is a file, write it to our filesystem */
+      /* This is a file, write it to the HTML file */
       char *tmp;
-      asprintf(&tmp,"%s/%s",name,entry->d_name);
+      // TODO remove this
+      //asprintf(&tmp,"%s/%s",name,entry->d_name);
+      //write_output(tmp);
+      // If the file is an image type, add it to HTML file 
+      // (make macros for testing each type) 
     }
   } while ((entry = readdir(dir)));
   closedir(dir);
+
+  /* Join all subdirectory threads before exiting */
+  int i;
+  for(i = 0; i < cur_subdir_thread; i++) {
+    void *status;
+    pthread_join(subdir_threads[i],&status);
+  }
 
   pthread_exit((void*) input_dir);
 }
@@ -185,6 +204,21 @@ void *do_v3(void *input_dir) {
   pthread_exit((void*) input_dir);
 }
 
+/* Initialize the HTML file */
+void init_html() {
+
+}
+
+/* Write entry to HTML file */
+void write_html(const file_struct_t *file) {
+
+}
+
+/* Complete and close the HTML file */
+void finish_html() {
+
+}
+
 /* Attempt to read the specified directory, return zero if failure, non-zero
  * if success*/
 int read_dir(const char *dir_name) {
@@ -196,41 +230,15 @@ int read_dir(const char *dir_name) {
   return 0;
 }
 
-/* Recursively the input directory, write all files to our filesystem */
-void traverse_input_dir(char *name)
+/* Return the file extension (ex: a.jpg -> jpg) */
+const char* get_file_type(const char *f_name)
 {
-  DIR *dir;
-  struct dirent *entry;
+  char *tmp = strrchr(f_name,'.');
 
-  if (!(dir = opendir(name)))
-  {
-    perror("Failed to open dir");
-    return;
-  }
-  if (!(entry = readdir(dir)))
-  {
-    perror("Failed to read dir");
-    return;
-  }
+  /* Doesn't have an extension */
+  if(tmp == NULL)
+    return NULL;
 
-  do
-  {
-    if (entry->d_type == DT_DIR)
-    {
-      /* This is a directory */
-      char path[1024];
-      int len = snprintf(path, sizeof(path)-1, "%s/%s", name, entry->d_name);
-      path[len] = 0;
-      if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-          continue;
-    }
-    else
-    {
-      /* This is a file, write it to our filesystem */
-      char *tmp;
-      asprintf(&tmp,"%s/%s",name,entry->d_name);
-    }
-  } while ((entry = readdir(dir)));
-  closedir(dir);
+  return tmp+1;
 }
 
