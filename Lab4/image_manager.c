@@ -18,11 +18,17 @@ Commentary=This program manages image files
 /* Utility functions */
 int read_dir(const char *dir_name);
 const char *get_file_type(const char *f);
+#define IS_JPG(f) (strcmp("jpg",get_file_type(f)) == 0)
+#define IS_PNG(f) (strcmp("png",get_file_type(f)) == 0)
+#define IS_BMP(f) (strcmp("bmp",get_file_type(f)) == 0)
+#define IS_GIF(f) (strcmp("gif",get_file_type(f)) == 0)
+#define IS_IMAGE(f) (IS_JPG(f) || IS_PNG(f) || IS_BMP(f) || IS_GIF(f))
 
 /* Thread subroutines */
 void *do_v1(void *dir);
 void *do_v2(void *dir);
 void *do_v3(void *dir);
+file_struct_t *build_file_struct(const char *file); 
 
 int main(int argc, char **argv) {
   /* Enforce command line arguments */
@@ -73,12 +79,14 @@ int main(int argc, char **argv) {
   output_file = fopen(OUTPUT_FILE,"ab+");
 
   /* Kick off the real work now */
+  init_html();
   run_variant(*variant);
 
   /* All done, clean up everything */
   free(variant);
   fclose(log_file);
   fclose(output_file);
+  finish_html();
 
   return 0;
 }
@@ -173,13 +181,16 @@ void *do_v1(void *input_dir) {
           continue;
       pthread_create(&subdir_threads[cur_subdir_thread++],NULL,do_v1,(void *)path);
     } else {
-      /* This is a file, write it to the HTML file */
+      /* This is a file, check if it's an image */
       char *tmp;
-      // TODO remove this
-      //asprintf(&tmp,"%s/%s",name,entry->d_name);
-      //write_output(tmp);
-      // If the file is an image type, add it to HTML file 
-      // (make macros for testing each type) 
+      asprintf(&tmp,"%s/%s",name,entry->d_name);
+      if(IS_IMAGE(entry->d_name)) {
+        /* It's an image, write its information to the HTML file */
+        fprintf(stderr,"Image: %s\n",tmp);
+        file_struct_t *tuple = build_file_struct(tmp);
+        write_html(tuple);
+        free(tuple);
+      }
     }
   } while ((entry = readdir(dir)));
   closedir(dir);
@@ -202,6 +213,11 @@ void *do_v2(void *input_dir) {
 void *do_v3(void *input_dir) {
 
   pthread_exit((void*) input_dir);
+}
+
+/* Return a new file struct with the information of this file */
+file_struct_t *build_file_struct(const char *file) {
+  return NULL;
 }
 
 /* Initialize the HTML file */

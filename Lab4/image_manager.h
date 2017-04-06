@@ -34,19 +34,19 @@ typedef enum variant {
 /* -------------- Data -------------- */
 
 /* File pointer to log file */
-FILE *log_file;
+static FILE *log_file;
 
 /* File pointer to ouput file */
-FILE *output_file;
+static FILE *output_file;
 
 /* File pointer to HTML file */
-FILE *html_file;
+static FILE *html_file;
 
 /* Input directory containing image files/subdirectories */
-const char *input_dir;
+static const char *input_dir;
 
 /* Output directory where we place HTML file */
-const char *output_dir; 
+static const char *output_dir; 
 
 /* ----------- FUNCTIONS ------------ */
 
