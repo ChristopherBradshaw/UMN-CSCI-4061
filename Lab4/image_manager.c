@@ -14,10 +14,12 @@ Commentary=This program manages image files
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
 
 /* Utility functions */
 int read_dir(const char *dir_name);
-const char *get_file_type(const char *f);
+char *get_file_type(const char *f);
 #define IS_JPG(f) (strcmp("jpg",get_file_type(f)) == 0)
 #define IS_PNG(f) (strcmp("png",get_file_type(f)) == 0)
 #define IS_BMP(f) (strcmp("bmp",get_file_type(f)) == 0)
@@ -74,10 +76,17 @@ int main(int argc, char **argv) {
   }
 
   /* Open the log/output files, create if they doesn't exist */
-  log_file = fopen(LOG_FILE,"ab+");
+  char *tmp;
+  asprintf(&tmp,"%s/%s",output_dir,LOG_FILE);
+  log_file = fopen(tmp,"ab+");
   remove(OUTPUT_FILE);
-  output_file = fopen(OUTPUT_FILE,"ab+");
+  asprintf(&tmp,"%s/%s",output_dir,OUTPUT_FILE);
+  output_file = fopen(tmp,"ab+");
 
+  /* Init mutexes */
+  pthread_mutex_init(&log_mutex, NULL);
+  pthread_mutex_init(&output_mutex, NULL);
+  pthread_mutex_init(&html_mutex, NULL);
   /* Kick off the real work now */
   init_html();
   run_variant(*variant);
@@ -87,6 +96,9 @@ int main(int argc, char **argv) {
   fclose(log_file);
   fclose(output_file);
   finish_html();
+  pthread_mutex_destroy(&log_mutex);
+  pthread_mutex_destroy(&output_mutex);
+  pthread_mutex_destroy(&html_mutex);
 
   return 0;
 }
@@ -132,14 +144,16 @@ int run_variant(variant_t variant) {
 
 /* Write to output file, must be thread safe */
 void write_output(const char *str) {
-  // TODO - make thread safe?
+  pthread_mutex_lock(&output_mutex);
   fprintf(output_file,"%s\n",str);
+  pthread_mutex_unlock(&output_mutex);
 }
 
 /* Write to log file, must be thread safe */
 void write_log(const char *str) {
-  // TODO - make thread safe?
+  pthread_mutex_lock(&log_mutex);
   fprintf(log_file,"%s\n",str);
+  pthread_mutex_unlock(&log_mutex);
 }
 
 /* Thread subroutines */
@@ -149,13 +163,8 @@ void *do_v1(void *input_dir) {
   const char *name = (char*)input_dir;
   char *tmp;
 
-  // TODO -- assume MAX_SUBDIRS?
   pthread_t subdir_threads[MAX_SUBDIRS];
   int cur_subdir_thread = 0;
-
-  // TODO remove this
-  //asprintf(&tmp,"Found dir: %s",name);
-  //write_output(tmp);
 
   if (!(dir = opendir(name))) {
     perror("Failed to open dir");
@@ -186,7 +195,6 @@ void *do_v1(void *input_dir) {
       asprintf(&tmp,"%s/%s",name,entry->d_name);
       if(IS_IMAGE(entry->d_name)) {
         /* It's an image, write its information to the HTML file */
-        fprintf(stderr,"Image: %s\n",tmp);
         file_struct_t *tuple = build_file_struct(tmp);
         write_html(tuple);
         free(tuple);
@@ -206,6 +214,58 @@ void *do_v1(void *input_dir) {
 }
 
 void *do_v2(void *input_dir) {
+  DIR *dir;
+  struct dirent *entry;
+  const char *name = (char*)input_dir;
+  char *tmp;
+
+  pthread_t subdir_threads[MAX_SUBDIRS];
+  int cur_subdir_thread = 0;
+
+  if (!(dir = opendir(name))) {
+    perror("Failed to open dir");
+    return NULL;
+  }
+  if (!(entry = readdir(dir))) {
+    perror("Failed to read dir");
+    return NULL;
+  }
+
+  do {
+    if (entry->d_type == DT_DIR) {
+      if(cur_subdir_thread >= MAX_SUBDIRS) {
+        asprintf(&tmp, "ERROR: Exceeded %d subdirectories in %s",MAX_SUBDIRS,name);
+        write_output(tmp);
+        break;
+      }
+
+      /* This is a directory */
+      char *path; 
+      asprintf(&path,"%s/%s",name,entry->d_name);
+      if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+          continue;
+      pthread_create(&subdir_threads[cur_subdir_thread++],NULL,do_v2,(void *)path);
+    } else {
+      /* This is a file, check if it's an image */
+      char *tmp;
+      asprintf(&tmp,"%s/%s",name,entry->d_name);
+      // TODO add more checks here for different image types
+      if(IS_IMAGE(entry->d_name)) {
+        /* It's an image, write its information to the HTML file */
+        file_struct_t *tuple = build_file_struct(tmp);
+        write_html(tuple);
+        free(tuple);
+      }
+    }
+  } while ((entry = readdir(dir)));
+  closedir(dir);
+
+  /* Join all subdirectory threads before exiting */
+  int i;
+  for(i = 0; i < cur_subdir_thread; i++) {
+    void *status;
+    pthread_join(subdir_threads[i],&status);
+  }
 
   pthread_exit((void*) input_dir);
 }
@@ -217,22 +277,57 @@ void *do_v3(void *input_dir) {
 
 /* Return a new file struct with the information of this file */
 file_struct_t *build_file_struct(const char *file) {
-  return NULL;
+  int fd;
+  if((fd = open(file,O_RDONLY)) < 0) {
+    char *tmp;
+    asprintf(&tmp,"Error while opening %s",file);
+    write_output(tmp);
+    return NULL;
+  }
+
+  struct stat file_stat;
+  int ret;
+  if((ret = fstat(fd, &file_stat)) < 0) {
+    char *tmp;
+    asprintf(&tmp,"Error while stat %s",file);
+    write_output(tmp);
+    return NULL;
+  }
+
+  file_struct_t *new_tuple = malloc(sizeof(file_struct_t));
+  strcpy(new_tuple->FileName, file);
+  new_tuple->FileId = file_stat.st_ino;
+  new_tuple->FileType = get_file_type(file);
+  new_tuple->Size = file_stat.st_size;
+  new_tuple->TimeOfModification = file_stat.st_mtim;
+  new_tuple->ThreadId = pthread_self();
+  return new_tuple;
 }
 
 /* Initialize the HTML file */
 void init_html() {
-
+  char *tmp;
+  asprintf(&tmp,"%s/%s",output_dir,HTML_FILE);
+  remove(tmp);
+  html_file = fopen(tmp,"ab+");
+  fprintf(html_file,"<html><head><title>Image Manager</title></head><body>\n");
 }
 
-/* Write entry to HTML file */
+/* Write entry to HTML file -- THREAD SAFE */
 void write_html(const file_struct_t *file) {
+  if(file == NULL)
+    return;
 
+  pthread_mutex_lock(&html_mutex);
+  fprintf(html_file,"<a href=../%s><img src=../%s width=100 height = 100></img></a>\
+      <p align=\"left\">%d, %s, %s, %d, time, %ld</p>",file->FileName,file->FileName,
+      file->FileId, file->FileName, file->FileType, file->Size, file->ThreadId);  
+  pthread_mutex_unlock(&html_mutex);
 }
 
 /* Complete and close the HTML file */
 void finish_html() {
-
+  fclose(html_file);
 }
 
 /* Attempt to read the specified directory, return zero if failure, non-zero
@@ -247,7 +342,7 @@ int read_dir(const char *dir_name) {
 }
 
 /* Return the file extension (ex: a.jpg -> jpg) */
-const char* get_file_type(const char *f_name)
+char* get_file_type(const char *f_name)
 {
   char *tmp = strrchr(f_name,'.');
 

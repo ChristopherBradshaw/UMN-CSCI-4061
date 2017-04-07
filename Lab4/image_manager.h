@@ -21,9 +21,9 @@ Commentary=This program manages image files
 typedef struct filestruct {
   int FileId; 
   char FileName[128]; 
-  char FileType[8];
+  char *FileType;
   int Size;
-  time_t TimeOfModification;
+  struct timespec TimeOfModification;
   pthread_t ThreadId;
 } file_struct_t;
 
@@ -32,6 +32,15 @@ typedef enum variant {
 } variant_t;
 
 /* -------------- Data -------------- */
+
+/* Log file lock */
+pthread_mutex_t log_mutex;
+
+/* Output file lock */
+pthread_mutex_t output_mutex;
+
+/* HTML file lock */
+pthread_mutex_t html_mutex;
 
 /* File pointer to log file */
 static FILE *log_file;
