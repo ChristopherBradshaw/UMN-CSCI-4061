@@ -31,6 +31,15 @@ typedef enum variant {
   V1,V2,V3
 } variant_t;
 
+typedef enum v2threadtype {
+  DIRECTORY,JPG,PNG,BMP,GIF
+} v2_thread_t;
+
+typedef struct v2struct {
+  char *dir;
+  v2_thread_t type; 
+} v2struct_data_t;
+
 /* -------------- Data -------------- */
 
 /* Log file lock */
