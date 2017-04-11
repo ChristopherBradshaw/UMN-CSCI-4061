@@ -17,6 +17,7 @@ Commentary=This program manages image files
 #define LOG_FILE "catalog.log"
 #define OUTPUT_FILE "output.log"
 #define MAX_SUBDIRS 128
+#define MAX_FILES_PER_DIR 256
 
 typedef struct filestruct {
   int FileId; 

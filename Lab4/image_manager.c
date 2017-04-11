@@ -31,6 +31,7 @@ void *do_v1(void *dir);
 void *do_v2(void *dir);
 void *do_v2_help(void *v2struct);
 void *do_v3(void *dir);
+void *do_v3_img(void *file);
 file_struct_t *build_file_struct(const char *file); 
 
 int main(int argc, char **argv) {
@@ -235,6 +236,7 @@ void *do_v2_help(void *v2struct) {
     perror("Failed to read dir");
     return NULL;
   }
+
   do {
     if (entry->d_type == DT_DIR) {
       // This is a directory, check if we're the "directory" thread
@@ -340,7 +342,79 @@ void *do_v2(void *input_dir) {
   pthread_exit((void*) input_dir);
 }
 
+void *do_v3_img(void *file) {
+  file_struct_t *tuple = build_file_struct(file);
+  write_html(tuple);
+  free(tuple);
+  pthread_exit(NULL);
+}
+
 void *do_v3(void *input_dir) {
+  DIR *dir;
+  struct dirent *entry;
+  const char *name = (char*)input_dir;
+  char *tmp;
+
+  char *subdir_strs[MAX_SUBDIRS];
+  int cur_subdir_str = 0;
+
+  pthread_t subdir_threads[MAX_SUBDIRS];
+  pthread_t file_threads[MAX_FILES_PER_DIR];
+  int cur_file_threads = 0;
+
+
+  if (!(dir = opendir(name))) {
+    perror("Failed to open dir");
+    return NULL;
+  }
+  if (!(entry = readdir(dir))) {
+    perror("Failed to read dir");
+    return NULL;
+  }
+
+  do {
+    if (entry->d_type == DT_DIR) {
+      if(cur_subdir_str >= MAX_SUBDIRS) {
+        asprintf(&tmp, "ERROR: Exceeded %d subdirectories in %s",MAX_SUBDIRS,name);
+        write_output(tmp);
+        break;
+      }
+
+      /* This is a directory */
+      char *path; 
+      asprintf(&path,"%s/%s",name,entry->d_name);
+      if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+          continue;
+      subdir_strs[cur_subdir_str++] = path;
+    } else {
+      /* This is a file, check if it's an image */
+      char *tmp;
+      asprintf(&tmp,"%s/%s",name,entry->d_name);
+      if(IS_IMAGE(entry->d_name)) {
+        /* It's an image, write its information to the HTML file */
+        pthread_create(&file_threads[cur_file_threads++],NULL,do_v3_img,(void *)tmp);
+      }
+    }
+  } while ((entry = readdir(dir)));
+  closedir(dir);
+
+  /* Join all image threads before working on subdirectories */
+  int i;
+  for(i = 0; i < cur_file_threads; i++) {
+    void *status;
+    pthread_join(file_threads[i],&status);
+  }
+
+  /* Start subdirectory threads */
+  for(i = 0; i < cur_subdir_str; i++) {
+    pthread_create(&subdir_threads[i],NULL,do_v3,(void *)subdir_strs[i]);
+  }
+
+  /* Join subdirectory threads */
+  for(i = 0; i < cur_subdir_str; i++) {
+    void *status;
+    pthread_join(subdir_threads[i],&status);
+  }
 
   pthread_exit((void*) input_dir);
 }
