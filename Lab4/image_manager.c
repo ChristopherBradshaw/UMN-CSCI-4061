@@ -20,6 +20,7 @@ Commentary=This program manages image files
 /* Utility functions */
 int read_dir(const char *dir_name);
 char *get_file_type(const char *f);
+file_struct_t *build_file_struct(const char *file); 
 #define IS_JPG(f) (strcmp("jpg",get_file_type(f)) == 0)
 #define IS_PNG(f) (strcmp("png",get_file_type(f)) == 0)
 #define IS_BMP(f) (strcmp("bmp",get_file_type(f)) == 0)
@@ -32,7 +33,6 @@ void *do_v2(void *dir);
 void *do_v2_help(void *v2struct);
 void *do_v3(void *dir);
 void *do_v3_img(void *file);
-file_struct_t *build_file_struct(const char *file); 
 
 int main(int argc, char **argv) {
   /* Enforce command line arguments */
@@ -82,11 +82,18 @@ int main(int argc, char **argv) {
   remove(OUTPUT_FILE);
   asprintf(&tmp,"%s/%s",output_dir,OUTPUT_FILE);
   output_file = fopen(tmp,"ab+");
+  num_dirs = num_jpg = num_bmp = num_png = num_gif = num_threads = 0;
 
   /* Init mutexes */
   pthread_mutex_init(&log_mutex, NULL);
   pthread_mutex_init(&output_mutex, NULL);
   pthread_mutex_init(&html_mutex, NULL);
+  pthread_mutex_init(&num_dirs_mutex, NULL);
+  pthread_mutex_init(&num_jpg_mutex, NULL);
+  pthread_mutex_init(&num_bmp_mutex, NULL);
+  pthread_mutex_init(&num_png_mutex, NULL);
+  pthread_mutex_init(&num_gif_mutex, NULL);
+  pthread_mutex_init(&num_threads_mutex, NULL);
 
   /* Kick off the real work now */
   init_html();
@@ -443,7 +450,8 @@ file_struct_t *build_file_struct(const char *file) {
   new_tuple->FileId = file_stat.st_ino;
   new_tuple->FileType = get_file_type(file);
   new_tuple->Size = file_stat.st_size;
-  new_tuple->TimeOfModification = file_stat.st_mtim;
+  new_tuple->TimeOfModification = malloc(sizeof(struct timespec));
+  *(new_tuple->TimeOfModification) = file_stat.st_mtim;
   new_tuple->ThreadId = pthread_self();
   return new_tuple;
 }
@@ -462,10 +470,23 @@ void write_html(const file_struct_t *file) {
   if(file == NULL)
     return;
 
+  /* Modified timestamp */
+  struct tm t;
+  if (localtime_r(&(file->TimeOfModification->tv_sec), &t) == NULL)
+    return;
+
+  char timestamp[256];
+  const uint TIME_FMT = strlen("2012-12-31 12:59:59.123456789") + 1;
+
+  if((strftime(timestamp, TIME_FMT, "%F %T", &t)) == 0)
+    return;
+
   pthread_mutex_lock(&html_mutex);
-  fprintf(html_file,"<a href=../%s><img src=../%s width=100 height = 100></img></a>\
-      <p align=\"left\">%d, %s, %s, %d, time, %ld</p>",file->FileName,file->FileName,
-      file->FileId, file->FileName, file->FileType, file->Size, file->ThreadId);  
+  fprintf(html_file,"<a href=../%s><img src=../%s width=100 height = 100></img>\
+      </a><p align=\"left\">INode: %d, Name: %s, Type: %s, Size: %d bytes,\
+      Last modified: %s, Thread ID: %ld</p>",file->FileName,
+      file->FileName, file->FileId, file->FileName, file->FileType, file->Size,
+      timestamp, file->ThreadId);  
   pthread_mutex_unlock(&html_mutex);
 }
 
@@ -497,3 +518,39 @@ char* get_file_type(const char *f_name)
   return tmp+1;
 }
 
+/* Functions to update dir/image/thread counts... */
+void inc_dirs() {
+  pthread_mutex_lock(&num_dirs_mutex);
+  ++num_dirs;
+  pthread_mutex_unlock(&num_dirs_mutex);
+}
+
+void inc_jpg() {
+  pthread_mutex_lock(&num_jpg_mutex);
+  ++num_jpg;
+  pthread_mutex_unlock(&num_jpg_mutex);
+}
+
+void inc_bmp() {
+  pthread_mutex_lock(&num_bmp_mutex);
+  ++num_bmp;
+  pthread_mutex_unlock(&num_bmp_mutex);
+}
+
+void inc_png() {
+  pthread_mutex_lock(&num_png_mutex);
+  ++num_png;
+  pthread_mutex_unlock(&num_png_mutex);
+}
+
+void inc_gif() {
+  pthread_mutex_lock(&num_gif_mutex);
+  ++num_gif;
+  pthread_mutex_unlock(&num_gif_mutex);
+}
+
+void inc_threads() {
+  pthread_mutex_lock(&num_threads_mutex);
+  ++num_threads;
+  pthread_mutex_unlock(&num_threads_mutex);
+}
