@@ -82,14 +82,13 @@ int main(int argc, char **argv) {
   /* Open the log/output files, create if they doesn't exist */
   char *tmp;
   asprintf(&tmp,"%s/%s",output_dir,LOG_FILE);
-  remove(tmp);
   log_file = fopen(tmp,"ab+");
   remove(OUTPUT_FILE);
   asprintf(&tmp,"%s/%s",output_dir,OUTPUT_FILE);
   remove(tmp);
   output_file = fopen(tmp,"ab+");
   num_dirs = num_jpg = num_bmp = num_png = num_gif = num_threads = 0;
-  asprintf(&tmp,"Variant %s\n", argv[1]);
+  asprintf(&tmp,"\nVariant %s\n", argv[1]);
   write_log(tmp);
   write_log("----------------------------------");
   pthread_create(&log_thread,NULL,do_log,NULL);
