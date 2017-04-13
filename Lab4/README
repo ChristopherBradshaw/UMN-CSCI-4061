@@ -1,0 +1,22 @@
+Variant runtime analysis:
+
+Tested on provided dir0
+V1 - 1600 ms
+V2 - 16500 ms
+V3 - 2200 ms
+
+Explanations:
+Generally, multi-threading won't improve the performance of an application such as this. 
+There's no asynchronous data we're working with (file IO, web requests etc), 
+which is where we'd typically see a speed up. In this program, we're simply
+traversing local directories. In fact, spinning up new threads actually
+decreases the performance, as seen. This significant time difference is because
+of the overhead of creating new threads, as well as having these threads
+duplicate existing work. Ex: In V2, we're traversing an entire directory
+5 times, as opposed to 1 in V1.
+
+V1 - Lowest because it has the lowest overhead (only create one thread per dir)
+V2 - Highest because it has the highest overhead (create 5 threads per dir)
+      all 5 of these threads must completely traverse the directory
+V3 - Lowish overhead, we're not creating as many threads as V2, but we do
+      have the additional task of ensuring level order traversal
