@@ -168,7 +168,7 @@ void write_log(const char *str) {
   pthread_mutex_unlock(&log_mutex);
 }
 
-/* Thread subroutines */
+/* One thread per directory */
 void *do_v1(void *input_dir) {
   inc_threads();
   inc_dirs();
@@ -323,8 +323,8 @@ void *do_v2_help(void *v2struct) {
   pthread_exit((void*) input_dir);
 }
 
-// Dispatch 5 threads for this directory: one for subdirs 
-// and one for each of the 4 image types
+/* 5 threads per directory - one for each of the four image types, one
+ * for subdirectories */
 void *do_v2(void *input_dir) {
   char *input_dir_s = (char *) input_dir;
   pthread_t dir_th, jpg_th, png_th, bmp_th, gif_th;
@@ -364,6 +364,7 @@ void *do_v3_img(void *file) {
   pthread_exit(NULL);
 }
 
+/* Level order traversal */
 void *do_v3(void *input_dir) {
   inc_dirs();
   inc_threads();
