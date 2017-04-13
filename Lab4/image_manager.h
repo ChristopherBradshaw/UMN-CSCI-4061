@@ -18,6 +18,7 @@ Commentary=This program manages image files
 #define OUTPUT_FILE "output.log"
 #define MAX_SUBDIRS 128
 #define MAX_FILES_PER_DIR 256
+#define LOG_MS_DELAY 100
 
 typedef struct filestruct {
   int FileId; 
@@ -43,17 +44,26 @@ typedef struct v2struct {
 
 /* -------------- Data -------------- */
 
+/* Number of log cycles completed (determined by LOG_MS_DELAY) */
+static int num_log_cycles;
+
+/* Program start time */
+static time_t start_time;
+
+/* Log thread */
+static pthread_t log_thread;
+
 /* File pointer to log file */
 static FILE *log_file;
-pthread_mutex_t log_mutex;
+static pthread_mutex_t log_mutex;
 
 /* File pointer to ouput file */
 static FILE *output_file;
-pthread_mutex_t output_mutex;
+static pthread_mutex_t output_mutex;
 
 /* File pointer to HTML file */
 static FILE *html_file;
-pthread_mutex_t html_mutex;
+static pthread_mutex_t html_mutex;
 
 /* Input directory containing image files/subdirectories */
 static const char *input_dir;
@@ -63,27 +73,27 @@ static const char *output_dir;
 
 /* Number of directories visited */
 static int num_dirs;
-pthread_mutex_t num_dirs_mutex;
+static pthread_mutex_t num_dirs_mutex;
 
 /* Number of JPG images seen */
 static int num_jpg;
-pthread_mutex_t num_jpg_mutex;
+static pthread_mutex_t num_jpg_mutex;
 
 /* Number of BMP images seen */
 static int num_bmp;
-pthread_mutex_t num_bmp_mutex;
+static pthread_mutex_t num_bmp_mutex;
 
 /* Number of PNG images seen */
 static int num_png;
-pthread_mutex_t num_png_mutex;
+static pthread_mutex_t num_png_mutex;
 
 /* Number of GIF images seen */
 static int num_gif;
-pthread_mutex_t num_gif_mutex;
+static pthread_mutex_t num_gif_mutex;
 
 /* Number of threads created */
 static int num_threads;
-pthread_mutex_t num_threads_mutex;
+static pthread_mutex_t num_threads_mutex;
 
 /* ----------- FUNCTIONS ------------ */
 
@@ -106,6 +116,12 @@ void write_html(const file_struct_t *file);
 
 /* Complete and close the HTML file */
 void finish_html();
+
+/* Complete and close the log file */
+void finish_log();
+
+/* Complete and close the output file */
+void finish_output();
 
 /* Functions to update dir/image/thread counts... */
 void inc_dirs();

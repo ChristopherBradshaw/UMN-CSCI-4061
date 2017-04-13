@@ -16,6 +16,7 @@ Commentary=This program manages image files
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <signal.h>
 
 /* Utility functions */
 int read_dir(const char *dir_name);
@@ -33,8 +34,11 @@ void *do_v2(void *dir);
 void *do_v2_help(void *v2struct);
 void *do_v3(void *dir);
 void *do_v3_img(void *file);
+void *do_log(void *arg);
 
 int main(int argc, char **argv) {
+  time(&start_time);
+
   /* Enforce command line arguments */
   if(argc != 4) {
     fprintf(stderr,"Usage: %s [variant_options] [input_path] [output_dir]\n",
@@ -78,11 +82,18 @@ int main(int argc, char **argv) {
   /* Open the log/output files, create if they doesn't exist */
   char *tmp;
   asprintf(&tmp,"%s/%s",output_dir,LOG_FILE);
+  remove(tmp);
   log_file = fopen(tmp,"ab+");
   remove(OUTPUT_FILE);
   asprintf(&tmp,"%s/%s",output_dir,OUTPUT_FILE);
+  remove(tmp);
   output_file = fopen(tmp,"ab+");
   num_dirs = num_jpg = num_bmp = num_png = num_gif = num_threads = 0;
+  asprintf(&tmp,"Variant %s\n", argv[1]);
+  write_log(tmp);
+  write_log("----------------------------------");
+  pthread_create(&log_thread,NULL,do_log,NULL);
+  inc_threads();
 
   /* Init mutexes */
   pthread_mutex_init(&log_mutex, NULL);
@@ -100,9 +111,10 @@ int main(int argc, char **argv) {
   run_variant(*variant);
 
   /* All done, clean up everything */
+  pthread_cancel(log_thread);
   free(variant);
-  fclose(log_file);
-  fclose(output_file);
+  finish_log();
+  finish_output();
   finish_html();
   pthread_mutex_destroy(&log_mutex);
   pthread_mutex_destroy(&output_mutex);
@@ -437,6 +449,24 @@ void *do_v3(void *input_dir) {
   pthread_exit((void*) input_dir);
 }
 
+/* Start timer for writing to log */
+void *do_log(void *arg)
+{
+  arg = NULL;
+  num_log_cycles = 1;
+  while(1)
+  {
+    sleep(LOG_MS_DELAY/1000);
+    int num_img = num_jpg + num_png + num_gif + num_bmp;
+    char *tmp;
+    asprintf(&tmp,"Time: %d ms #dir %d #files %d",num_log_cycles*LOG_MS_DELAY,
+        num_dirs,num_img);
+    write_log(tmp);
+    ++num_log_cycles;
+  }
+  return 0;
+}
+
 /* Return a new file struct with the information of this file */
 file_struct_t *build_file_struct(const char *file) {
   int fd;
@@ -515,6 +545,45 @@ void write_html(const file_struct_t *file) {
 /* Complete and close the HTML file */
 void finish_html() {
   fclose(html_file);
+}
+
+/* Complete and close the log file */
+void finish_log() {
+  /* Format the time nicely */
+  char *tmp;
+	char buffer[26];
+	struct tm* tm_info;
+	tm_info = localtime(&start_time);
+	strftime(buffer, 26, "%Y-%m-%d %H:%M:%S", tm_info);
+  asprintf(&tmp,"\nProgram initiation: %s", buffer);
+  write_log(tmp);
+
+  /* Print out number of images */
+  asprintf(&tmp,"\nNumber of jpg files = %d",num_jpg);
+  write_log(tmp);
+  asprintf(&tmp,"Number of bmp files = %d",num_bmp);
+  write_log(tmp);
+  asprintf(&tmp,"Number of png files = %d",num_png);
+  write_log(tmp);
+  asprintf(&tmp,"Number of gif files = %d",num_gif);
+  write_log(tmp);
+
+  asprintf(&tmp,"\nTotal number of valid image files = %d",num_gif + num_jpg
+      + num_png + num_bmp);
+  write_log(tmp);
+
+  asprintf(&tmp,"\nTotal time of execution = %d",num_log_cycles);
+  write_log(tmp);
+  write_log("----------------------------------");
+  asprintf(&tmp,"Number of threads created = %d",num_threads);
+  write_log(tmp);
+
+  fclose(log_file);
+}
+    
+/* Complete and close the output file */
+void finish_output() {
+  fclose(output_file);
 }
 
 /* Attempt to read the specified directory, return zero if failure, non-zero
