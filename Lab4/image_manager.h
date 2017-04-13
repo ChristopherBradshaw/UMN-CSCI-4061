@@ -109,6 +109,7 @@ void finish_html();
 
 /* Functions to update dir/image/thread counts... */
 void inc_dirs();
+void inc_dirs_by(int amount);
 void inc_jpg();
 void inc_bmp();
 void inc_png();

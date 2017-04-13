@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
 
   /* Make sure variant is valid */
   if(variant == NULL) {
-    write_output("Invalid variant option");
+    fprintf(stderr,"Invalid variant option\n");
     return 1;
   }
 
@@ -108,6 +108,9 @@ int main(int argc, char **argv) {
   pthread_mutex_destroy(&output_mutex);
   pthread_mutex_destroy(&html_mutex);
 
+  printf("Dirs: %d, Threads: %d\n",num_dirs,num_threads);
+  printf("JPG: %d, BMP: %d, GIF: %d, PNG: %d\n",num_jpg, 
+      num_bmp, num_gif, num_png);
   return 0;
 }
 
@@ -126,6 +129,7 @@ int run_variant(variant_t variant) {
     case V2:
       write_output("Variant 2");
       pthread_create(&parent_thread,NULL,do_v2,(void *)input_dir);
+      inc_dirs();
       break;
     case V3:
       write_output("Variant 3");
@@ -166,6 +170,8 @@ void write_log(const char *str) {
 
 /* Thread subroutines */
 void *do_v1(void *input_dir) {
+  inc_threads();
+  inc_dirs();
   DIR *dir;
   struct dirent *entry;
   const char *name = (char*)input_dir;
@@ -222,6 +228,7 @@ void *do_v1(void *input_dir) {
 }
 
 void *do_v2_help(void *v2struct) {
+  inc_threads();
   v2struct_data_t *data = (v2struct_data_t *) v2struct;
   DIR *dir;
   struct dirent *entry;
@@ -260,6 +267,7 @@ void *do_v2_help(void *v2struct) {
       char *path; 
       asprintf(&path,"%s/%s",name,entry->d_name);
       pthread_create(&subdir_threads[cur_subdir_thread++],NULL,do_v2,(void *)path);
+      inc_dirs();
     } else {
       // This is a file, check if we handle it
       char *tmp;
@@ -357,6 +365,8 @@ void *do_v3_img(void *file) {
 }
 
 void *do_v3(void *input_dir) {
+  inc_dirs();
+  inc_threads();
   DIR *dir;
   struct dirent *entry;
   const char *name = (char*)input_dir;
@@ -470,6 +480,17 @@ void write_html(const file_struct_t *file) {
   if(file == NULL)
     return;
 
+  /* Update appropriate image count variable */
+  if(IS_JPG(file->FileName)) {
+    inc_jpg();
+  } else if(IS_PNG(file->FileName)) {
+    inc_png();
+  } else if(IS_GIF(file->FileName)) {
+    inc_gif();
+  } else if(IS_BMP(file->FileName)) {
+    inc_bmp();
+  }
+
   /* Modified timestamp */
   struct tm t;
   if (localtime_r(&(file->TimeOfModification->tv_sec), &t) == NULL)
@@ -522,6 +543,12 @@ char* get_file_type(const char *f_name)
 void inc_dirs() {
   pthread_mutex_lock(&num_dirs_mutex);
   ++num_dirs;
+  pthread_mutex_unlock(&num_dirs_mutex);
+}
+
+void inc_dirs_by(int amount) {
+  pthread_mutex_lock(&num_dirs_mutex);
+  num_dirs += amount;
   pthread_mutex_unlock(&num_dirs_mutex);
 }
 
