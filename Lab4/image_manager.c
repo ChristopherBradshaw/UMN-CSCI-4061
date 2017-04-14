@@ -109,6 +109,12 @@ int main(int argc, char **argv) {
   init_html();
   run_variant(*variant);
 
+  asprintf(&tmp,"Dirs: %d, Threads: %d",num_dirs,num_threads);
+  write_output(tmp);
+  asprintf(&tmp, "JPG: %d, BMP: %d, GIF: %d, PNG: %d",num_jpg, 
+      num_bmp, num_gif, num_png);
+  write_output(tmp);
+
   /* All done, clean up everything */
   pthread_cancel(log_thread);
   free(variant);
@@ -119,9 +125,6 @@ int main(int argc, char **argv) {
   pthread_mutex_destroy(&output_mutex);
   pthread_mutex_destroy(&html_mutex);
 
-  printf("Dirs: %d, Threads: %d\n",num_dirs,num_threads);
-  printf("JPG: %d, BMP: %d, GIF: %d, PNG: %d\n",num_jpg, 
-      num_bmp, num_gif, num_png);
   return 0;
 }
 
@@ -187,6 +190,8 @@ void *do_v1(void *input_dir) {
   struct dirent *entry;
   const char *name = (char*)input_dir;
   char *tmp;
+  asprintf(&tmp,"V1 START- Dir: %s",name);
+  write_output(tmp);
 
   pthread_t subdir_threads[MAX_SUBDIRS];
   int cur_subdir_thread = 0;
@@ -235,6 +240,9 @@ void *do_v1(void *input_dir) {
     pthread_join(subdir_threads[i],&status);
   }
 
+  asprintf(&tmp,"V1 FINISH- Dir: %s",name);
+  write_output(tmp);
+
   pthread_exit((void*) input_dir);
 }
 
@@ -244,6 +252,9 @@ void *do_v2_help(void *v2struct) {
   DIR *dir;
   struct dirent *entry;
   const char *name = data->dir;
+  char *tmp;
+  asprintf(&tmp,"V2 SUBTHR- Dir: %s",data->dir);
+  write_output(tmp);
 
   // We might need to spawn more threads if we're the "directory" thread
   pthread_t *subdir_threads = NULL;
@@ -338,8 +349,11 @@ void *do_v2_help(void *v2struct) {
  * for subdirectories */
 void *do_v2(void *input_dir) {
   char *input_dir_s = (char *) input_dir;
+  char *tmp;
   pthread_t dir_th, jpg_th, png_th, bmp_th, gif_th;
   v2struct_data_t dir_data, jpg_data, png_data, bmp_data, gif_data;
+  asprintf(&tmp,"V2 START- Dir: %s",input_dir_s);
+  write_output(tmp);
 
   dir_data.type = DIRECTORY;
   jpg_data.type = JPG;
@@ -364,6 +378,9 @@ void *do_v2(void *input_dir) {
   pthread_join(png_th, NULL);
   pthread_join(bmp_th, NULL);
   pthread_join(gif_th, NULL);
+  
+  asprintf(&tmp,"V2 FINISH- Dir: %s",input_dir_s);
+  write_output(tmp);
 
   pthread_exit((void*) input_dir);
 }
@@ -383,6 +400,8 @@ void *do_v3(void *input_dir) {
   struct dirent *entry;
   const char *name = (char*)input_dir;
   char *tmp;
+  asprintf(&tmp,"V3 START- Dir: %s",name);
+  write_output(tmp);
 
   char *subdir_strs[MAX_SUBDIRS];
   int cur_subdir_str = 0;
@@ -444,6 +463,9 @@ void *do_v3(void *input_dir) {
     void *status;
     pthread_join(subdir_threads[i],&status);
   }
+
+  asprintf(&tmp,"V3 FINISH- Dir: %s",name);
+  write_output(tmp);
 
   pthread_exit((void*) input_dir);
 }
@@ -521,7 +543,11 @@ void write_html(const file_struct_t *file) {
     inc_bmp();
   }
 
-  /* Modified timestamp */
+  char *tmp;
+  asprintf(&tmp,"Writing HTML for img: %s",file->FileName);
+  write_output(tmp);
+
+  /* Generate modified timestamp */
   struct tm t;
   if (localtime_r(&(file->TimeOfModification->tv_sec), &t) == NULL)
     return;
@@ -532,6 +558,7 @@ void write_html(const file_struct_t *file) {
   if((strftime(timestamp, TIME_FMT, "%F %T", &t)) == 0)
     return;
 
+  /* Write the data */
   pthread_mutex_lock(&html_mutex);
   fprintf(html_file,"<a href=../%s><img src=../%s width=100 height = 100></img>\
       </a><p align=\"left\">INode: %d, Name: %s, Type: %s, Size: %d bytes,\
@@ -582,6 +609,7 @@ void finish_log() {
     
 /* Complete and close the output file */
 void finish_output() {
+  write_output("Done");
   fclose(output_file);
 }
 
