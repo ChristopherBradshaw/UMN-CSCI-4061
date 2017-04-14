@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  /* Open the log/output files, create if they doesn't exist */
+  /* Open/initialize the log/output files, create if they doesn't exist */
   char *tmp;
   asprintf(&tmp,"%s/%s",output_dir,LOG_FILE);
   log_file = fopen(tmp,"ab+");
@@ -109,12 +109,6 @@ int main(int argc, char **argv) {
   init_html();
   run_variant(*variant);
 
-  asprintf(&tmp,"Dirs: %d, Threads: %d",num_dirs,num_threads);
-  write_output(tmp);
-  asprintf(&tmp, "JPG: %d, BMP: %d, GIF: %d, PNG: %d",num_jpg, 
-      num_bmp, num_gif, num_png);
-  write_output(tmp);
-
   /* All done, clean up everything */
   pthread_cancel(log_thread);
   free(variant);
@@ -130,7 +124,7 @@ int main(int argc, char **argv) {
 
 /* Traverses input directory (using a method specified by the variant).
  * Builds HTML file and handles logging. */
-int run_variant(variant_t variant) { 
+int run_variant(variant_t variant) {
   /* This will be the first thread we run */
   pthread_t parent_thread;
 
@@ -156,26 +150,31 @@ int run_variant(variant_t variant) {
 
   /* Join the thread and check status */
   void *status;
+  char *tmp;
   int rc;
   if((rc = pthread_join(parent_thread,&status)) != 0) {
     /* Thread join hit an error */
-    char *tmp;
     asprintf(&tmp,"Error; return code %d from pthread_join()",rc);
     write_output(tmp);
     return 1;
   }
 
+  asprintf(&tmp,"Dirs: %d, Threads: %d",num_dirs,num_threads);
+  write_output(tmp);
+  asprintf(&tmp, "JPG: %d, BMP: %d, GIF: %d, PNG: %d",num_jpg, 
+      num_bmp, num_gif, num_png);
+  write_output(tmp);
   return 0;
 }
 
-/* Write to output file, must be thread safe */
+/* Write to output file, thread safe */
 void write_output(const char *str) {
   pthread_mutex_lock(&output_mutex);
   fprintf(output_file,"%s\n",str);
   pthread_mutex_unlock(&output_mutex);
 }
 
-/* Write to log file, must be thread safe */
+/* Write to log file, thread safe */
 void write_log(const char *str) {
   pthread_mutex_lock(&log_mutex);
   fprintf(log_file,"%s\n",str);
@@ -184,6 +183,7 @@ void write_log(const char *str) {
 
 /* One thread per directory */
 void *do_v1(void *input_dir) {
+  /* Update file/dir/thread # tracking vars */
   inc_threads();
   inc_dirs();
   DIR *dir;
@@ -193,6 +193,8 @@ void *do_v1(void *input_dir) {
   asprintf(&tmp,"V1 START- Dir: %s",name);
   write_output(tmp);
 
+  /* subdir_threads will maintain a list of running subdirectory threads 
+   * which will be joined at the end*/
   pthread_t subdir_threads[MAX_SUBDIRS];
   int cur_subdir_thread = 0;
 
@@ -205,6 +207,7 @@ void *do_v1(void *input_dir) {
     return NULL;
   }
 
+  /* Traverse the specified directory */
   do {
     if (entry->d_type == DT_DIR) {
       if(cur_subdir_thread >= MAX_SUBDIRS) {
@@ -247,6 +250,7 @@ void *do_v1(void *input_dir) {
 }
 
 void *do_v2_help(void *v2struct) {
+  /* Update file/dir/thread # tracking vars */
   inc_threads();
   v2struct_data_t *data = (v2struct_data_t *) v2struct;
   DIR *dir;
@@ -256,7 +260,7 @@ void *do_v2_help(void *v2struct) {
   asprintf(&tmp,"V2 SUBTHR- Dir: %s",data->dir);
   write_output(tmp);
 
-  // We might need to spawn more threads if we're the "directory" thread
+  /* We might need to spawn more threads if we're the "directory" thread */
   pthread_t *subdir_threads = NULL;
   int cur_subdir_thread = 0;
   if(data->type == DIRECTORY) {
@@ -273,10 +277,11 @@ void *do_v2_help(void *v2struct) {
     return NULL;
   }
 
+  /* Traverse the specified directory, look for whatever file type we're assigned */
   do {
     if (entry->d_type == DT_DIR) {
-      // This is a directory, check if we're the "directory" thread
-      // (which handles subdirectories)
+      /* This is a directory, check if we're the "directory" thread 
+       * (which handles subdirectories) */
       if(data->type != DIRECTORY || strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
           continue;
 
@@ -291,7 +296,7 @@ void *do_v2_help(void *v2struct) {
       pthread_create(&subdir_threads[cur_subdir_thread++],NULL,do_v2,(void *)path);
       inc_dirs();
     } else {
-      // This is a file, check if we handle it
+      /* This is a file, check if we handle it */
       char *tmp;
       asprintf(&tmp,"%s/%s",name,entry->d_name);
       if(!IS_IMAGE(entry->d_name))
@@ -300,7 +305,7 @@ void *do_v2_help(void *v2struct) {
       int shouldHandle = 0;
       switch(data->type) {
         case DIRECTORY:
-          // Shouldn't happen
+          /* Shouldn't happen, included for sanity */
           break;
         case JPG:
           if(IS_JPG(entry->d_name))
@@ -320,7 +325,7 @@ void *do_v2_help(void *v2struct) {
           break;
       }
 
-      // If this file type "belongs" to us
+      /* If this file type "belongs" to us */
       if(shouldHandle) {
         file_struct_t *tuple = build_file_struct(tmp);
         write_html(tuple);
@@ -394,6 +399,7 @@ void *do_v3_img(void *file) {
 
 /* Level order traversal */
 void *do_v3(void *input_dir) {
+  /* Update file/dir/thread # tracking vars */
   inc_dirs();
   inc_threads();
   DIR *dir;
@@ -403,10 +409,16 @@ void *do_v3(void *input_dir) {
   asprintf(&tmp,"V3 START- Dir: %s",name);
   write_output(tmp);
 
+  /* because we have to wait until all images are processed, we only
+   * store the file NAME and save thread creation for later */
   char *subdir_strs[MAX_SUBDIRS];
   int cur_subdir_str = 0;
 
+  /* subdir_threads will maintain a list of running subdirectory threads 
+   * which will be joined at the end*/
   pthread_t subdir_threads[MAX_SUBDIRS];
+  /* file_threads will maintain a list of running image file threads
+   * which will be joined at the end*/
   pthread_t file_threads[MAX_FILES_PER_DIR];
   int cur_file_threads = 0;
 
@@ -507,6 +519,7 @@ file_struct_t *build_file_struct(const char *file) {
     return NULL;
   }
 
+  /* Build the struct */
   file_struct_t *new_tuple = malloc(sizeof(file_struct_t));
   strcpy(new_tuple->FileName, file);
   new_tuple->FileId = file_stat.st_ino;
