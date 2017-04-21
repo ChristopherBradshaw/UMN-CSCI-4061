@@ -61,7 +61,7 @@ void init_socket() {
   sockaddr_in.sin_family = AF_INET;
   sockaddr_in.sin_port = htons(port);
 
-  if(connect(sockfd, (struct sockaddr*)&sockaddr_in, sizeof(sockaddr_in)) == -1) {
+  if(connect(sockfd, (struct sockaddr*)&sockaddr_in, sizeof(sockaddr_in)) < 0) {
     perror("connect");
     exit(EXIT_FAILURE);
   }
