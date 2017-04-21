@@ -1,4 +1,4 @@
-Server = <IP_address>
-Port = <port>
-Chunk_Size = <chunk size>
-ImageType = <type> (only for passive mode)
+Server=127.0.0.1
+Port=9090
+Chunk_Size=512
+ImageType=jpg
