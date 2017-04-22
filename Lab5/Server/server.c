@@ -75,14 +75,14 @@ void handle_cons() {
 
     // Create a new process for each connection
 		if (fork() == 0) {
-      close(sockfd);
       char tmp_buf[10];
       int n_read = 0;
       while((n_read = recv(new_fd,tmp_buf,10,0)) != 0 
           || errno == EAGAIN) {
-        printf("Read: %s\n",tmp_buf);
+        printf("Read (%d): %s\n",n_read,tmp_buf);
       }
       printf("Terminated connection: %s\n",s);
+      close(new_fd);
 		} else {
 		  close(new_fd);
     }
