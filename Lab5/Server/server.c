@@ -71,13 +71,14 @@ void handle_cons() {
 		inet_ntop(their_addr.ss_family,
       get_in_addr((struct sockaddr *)&their_addr),
       s, sizeof s);
-		printf("server: got connection from %s\n", s);
+		printf("New connection: %s\n", s);
 
     // Create a new process for each connection
 		if (fork() == 0) {
       close(sockfd);
       if (send(new_fd, "Hello, world!", 13, 0) == -1)
         perror("send");
+      printf("Terminated connection: %s\n",s);
       close(new_fd);
       exit(0);
 		}
