@@ -1,17 +1,33 @@
+/* Information
+CSci 4061 Spring 2017 Assignment 5
+Name1=Christopher Bradshaw
+StudentID1=5300734
+Commentary=Image server
+*/
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "server.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <netdb.h>
+#include <signal.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <errno.h>
 #include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
 #include <arpa/inet.h>
 
 int read_config(char *file);
 char *read_val(const char *key, char *str, int len);
 image_t *str_to_image_t(char *str);
-void init_socket();
+void handle_cons();
 
 /* ./server <config file> */
 int main(int argc, char **argv) {
@@ -25,51 +41,121 @@ int main(int argc, char **argv) {
     return 1;
   }
     
-  //init_socket();
+  init_socket();
+  handle_cons();
   return 0;
 }
 
-/*
-void init_socket() {
-  struct protoent *protoent;
-  struct hostent *hostent;
-  in_addr_t in_addr;
-  in_addr_t server_addr;
-  struct sockaddr_in sockaddr_in;
-
-  if((protoent = getprotobyname("tcp")) == NULL) {
-    perror("getprotobyname"); 
-    exit(EXIT_FAILURE);
+void *get_in_addr(struct sockaddr *sa) {
+  if (sa->sa_family == AF_INET) {
+    return &(((struct sockaddr_in*)sa)->sin_addr);
   }
-
-  if((sockfd = socket(AF_INET, SOCK_STREAM, protoent->p_proto)) == -1) {
-    perror("socket");
-    exit(EXIT_FAILURE);
-  }
-
-  if((hostent = gethostbyname(server_ip)) == NULL) {
-    fprintf(stderr,"error: gethostbyname(%s)\n",server_ip);
-    exit(EXIT_FAILURE);
-  }
-
-  in_addr = inet_addr(inet_ntoa(*(struct in_addr*)*(hostent->h_addr_list)));
-  if(in_addr == (in_addr_t)-1) {
-    fprintf(stderr,"error: inet_addr(%s)\n",*(hostent->h_addr_list));
-    exit(EXIT_FAILURE);
-  }
-
-  sockaddr_in.sin_addr.s_addr = in_addr;
-  sockaddr_in.sin_family = AF_INET;
-  sockaddr_in.sin_port = htons(port);
-
-  if(connect(sockfd, (struct sockaddr*)&sockaddr_in, sizeof(sockaddr_in)) < 0) {
-    perror("connect");
-    exit(EXIT_FAILURE);
-  }
-
-  write(sockfd,"potato",16);
+  return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
-*/
+
+/* Listen for connections */
+void handle_cons() {
+  int new_fd;
+	socklen_t sin_size;
+  struct sockaddr_storage their_addr;
+  char s[INET6_ADDRSTRLEN];
+
+	while(1) {
+		sin_size = sizeof their_addr;
+		new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
+		if (new_fd == -1) {
+      perror("accept");
+      continue;
+		}
+
+		inet_ntop(their_addr.ss_family,
+      get_in_addr((struct sockaddr *)&their_addr),
+      s, sizeof s);
+		printf("server: got connection from %s\n", s);
+
+    // Create a new process for each connection
+		if (fork() == 0) {
+      close(sockfd);
+      if (send(new_fd, "Hello, world!", 13, 0) == -1)
+        perror("send");
+      close(new_fd);
+      exit(0);
+		}
+		close(new_fd);
+	}
+}
+
+void sigchld_handler(int s) {
+  s = 0;
+  int saved_errno = errno;
+  while(waitpid(-1, NULL, WNOHANG) > 0);
+  errno = saved_errno;
+}
+
+void init_socket() {
+  struct addrinfo hints, *servinfo, *p;
+  struct sigaction sa;
+  int yes=1;
+  int rv;
+
+  /* Set connection hints */
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+
+  char *port_str;
+  asprintf(&port_str,"%d",port);
+  if ((rv = getaddrinfo(NULL, port_str, &hints, &servinfo)) != 0) {
+      fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+      return;
+  }
+
+  // loop through all the results and bind to the first we can
+  for(p = servinfo; p != NULL; p = p->ai_next) {
+    if ((sockfd = socket(p->ai_family, p->ai_socktype,
+        p->ai_protocol)) == -1) {
+      perror("server: socket");
+      continue;
+    }
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
+          sizeof(int)) == -1) {
+      perror("setsockopt");
+      exit(1);
+    }
+
+    if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+      close(sockfd);
+      perror("server: bind");
+      continue;
+    }
+
+    break;
+  }
+
+  freeaddrinfo(servinfo); // all done with this structure
+
+  if (p == NULL)  {
+    fprintf(stderr, "server: failed to bind\n");
+    exit(1);
+  }
+
+  if (listen(sockfd, MAX_WAITING) == -1) {
+    perror("listen");
+    exit(1);
+  }
+
+  sa.sa_handler = sigchld_handler; // reap all dead processes
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+  if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+    perror("sigaction");
+    exit(1);
+  }
+
+  printf("Listening on port %d\n",port);
+}
 
 /* Read the specified value for a keyword/label. Ex: Port=8080 */
 char *read_val(const char *key, char *str, int len) {
@@ -109,7 +195,6 @@ int read_config(char *file) {
   strcpy(server_dir,dirstr);
   port = atoi(portstr);
 
-  printf("Dir: %s, Port: %s\n",dirstr,portstr);
   /* Need to free these strs */
   free(portstr);
   free(dirstr);

@@ -1,3 +1,10 @@
+/* Information
+CSci 4061 Spring 2017 Assignment 5
+Name1=Christopher Bradshaw
+StudentID1=5300734
+Commentary=Image server
+*/
+
 #include "client.h"
 #include <stdio.h>
 #include <string.h>
@@ -5,13 +12,14 @@
 #include <netdb.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+/* Prototypes */
 int read_config(char *file);
 char *read_val(const char *key, char *str, int len);
 image_t *str_to_image_t(char *str);
-void init_socket();
 
 /* ./client <config file> */
 int main(int argc, char **argv) {
@@ -26,14 +34,23 @@ int main(int argc, char **argv) {
   }
     
   init_socket();
+
+  /* If an image type is specified, enter passive mode */
+  if(image_type) {
+    printf("Passive\n");
+  } else {
+    printf("Interactive\n");
+  }
+
+  read_catalog();
   return 0;
 }
 
+/* Initialize the connection */
 void init_socket() {
   struct protoent *protoent;
   struct hostent *hostent;
   in_addr_t in_addr;
-  in_addr_t server_addr;
   struct sockaddr_in sockaddr_in;
 
   if((protoent = getprotobyname("tcp")) == NULL) {
@@ -61,12 +78,29 @@ void init_socket() {
   sockaddr_in.sin_family = AF_INET;
   sockaddr_in.sin_port = htons(port);
 
-  if(connect(sockfd, (struct sockaddr*)&sockaddr_in, sizeof(sockaddr_in)) < 0) {
+  if(connect(sockfd,(struct sockaddr*)&sockaddr_in, sizeof(sockaddr_in)) < 0) {
     perror("connect");
     exit(EXIT_FAILURE);
   }
+}
 
-  write(sockfd,"potato",16);
+/* Read/save catalog from the server */
+int read_catalog() {
+  // +5 accounts for spaces/commas/newlines etc..
+  char file_buf[MAX_CATALOG_N*(MAX_CATALOG_FLEN+5)];
+  char buf[chunk_size];
+  write(sockfd,"0",1);
+
+  int rd;
+  while((rd = read(sockfd,buf,chunk_size)) || errno == EAGAIN) {
+
+  }
+  return 0;
+}
+
+/* Read/save a file from the server */
+int read_file(const char *fname) {
+  return 0;
 }
 
 /* Read the specified value for a keyword/label. Ex: Port=8080 */
@@ -105,7 +139,10 @@ int read_config(char *file) {
   char *chunkstr = read_val("Chunk_Size",buffer,rd);
   char *imgtypestr = read_val("ImageType",buffer,rd);
 
-  /* Conver strs to appropriate format if needed */
+  /* Make sure we have everything we need, then convert strs */
+  if(!ipstr || !portstr || !chunkstr)
+    return 1;
+
   strcpy(server_ip,ipstr);
   port = atoi(portstr);
   chunk_size = atoi(chunkstr);
