@@ -77,9 +77,18 @@ void handle_cons() {
 		if (fork() == 0) {
       char tmp_buf[10];
       int n_read = 0;
-      while((n_read = recv(new_fd,tmp_buf,10,0)) != 0 
+      while((n_read = recv(new_fd,tmp_buf,1,0)) != 0 
           || errno == EAGAIN) {
-        printf("Read (%d): %s\n",n_read,tmp_buf);
+        if(tmp_buf[0] == '0') {
+          printf("Catalog request\n");
+          char *lol = "potatothisisatesthowareyouhi";
+          int file_size = strlen(lol);
+          uint32_t un = htonl(file_size);
+          send(new_fd,&un,sizeof(uint32_t),0);
+          send(new_fd,lol,file_size,0);
+        } else if(tmp_buf[0] == '1') {
+          printf("File request\n"); 
+        }
       }
       printf("Terminated connection: %s\n",s);
       close(new_fd);

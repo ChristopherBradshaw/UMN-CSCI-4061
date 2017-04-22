@@ -43,6 +43,7 @@ int main(int argc, char **argv) {
   }
 
   read_catalog();
+  close(sockfd);
   return 0;
 }
 
@@ -84,18 +85,32 @@ void init_socket() {
   }
 }
 
+void parse_catalog(char *str) {
+  printf("Parsing: %s\n",str);
+}
+
 /* Read/save catalog from the server */
 int read_catalog() {
-  // +5 accounts for spaces/commas/newlines etc..
-  char file_buf[MAX_CATALOG_N*(MAX_CATALOG_FLEN+5)];
-  char buf[chunk_size];
-  char *lol = "thisisatesthihellowhatsupbye";
-  write(sockfd,lol,strlen(lol));
+  /* Request the catalog file */
+  write(sockfd,"0",1);
 
+  /* File size is sent first, read it */
+  uint32_t n;
+  recv(sockfd,&n,sizeof(uint32_t),0); 
+
+  /* Now read the actual file data */
+  int catalog_size = ntohl(n);
+  char file_buf[catalog_size+1];
+  char buf[chunk_size];
+  int total_read = 0;
   int rd;
-  while((rd = recv(sockfd,buf,chunk_size,0)) || errno == EAGAIN) {
-    printf("Read: %s\n",buf);
+  while(total_read < catalog_size && 
+      (((rd = recv(sockfd,buf,5,0)) != 0) || errno == EAGAIN)) {
+    strncpy(file_buf+total_read,buf,rd);
+    total_read += rd;
   }
+  file_buf[catalog_size] = '\0';
+  parse_catalog(file_buf);
   return 0;
 }
 
