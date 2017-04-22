@@ -89,11 +89,12 @@ int read_catalog() {
   // +5 accounts for spaces/commas/newlines etc..
   char file_buf[MAX_CATALOG_N*(MAX_CATALOG_FLEN+5)];
   char buf[chunk_size];
-  write(sockfd,"0",1);
+  char *lol = "thisisatesthihellowhatsupbye";
+  write(sockfd,lol,strlen(lol));
 
   int rd;
-  while((rd = read(sockfd,buf,chunk_size)) || errno == EAGAIN) {
-
+  while((rd = recv(sockfd,buf,chunk_size,0)) || errno == EAGAIN) {
+    printf("Read: %s\n",buf);
   }
   return 0;
 }
