@@ -8,16 +8,24 @@ Commentary=Image server
 #ifndef CLIENT_H
 #define CLIENT_H
 
-#define MAX_CATALOG_N 128
-#define MAX_CATALOG_FLEN 128
+// Maximum number of catalog entries
+#define MAX_CATALOG_N 256
+
 typedef enum image_type {
   JPG, PNG, GIF, TIFF
 } image_t;
 
+typedef struct catalog_entry {
+  char filename[128];
+  char checksum[64];
+  int filesize;
+} catalog_entry_t;
+
 /* Data */
-static char catalog[MAX_CATALOG_N][MAX_CATALOG_FLEN+1]; // Catalog from server
+static catalog_entry_t catalog[MAX_CATALOG_N]; // Catalog from server
+static int catalog_idx = 0;
 static char server_ip[128]; // Server IP address
-static int port;  // Server port
+static int server_port;  // Server port
 static int chunk_size;  // Max number of bytes in a packet
 static image_t *image_type; // Type of image to download (implies passive mode)
 int sockfd; // File descriptor for connection to server

@@ -8,6 +8,7 @@ Commentary=Image server
 #ifndef SERVER_H
 #define SERVER_H
 #define MAX_WAITING 10 // Maximum number of waiting connections
+#define CATALOG_FILE "catalog.csv"
 
 typedef enum image_type {
   JPG, PNG, GIF, TIFF

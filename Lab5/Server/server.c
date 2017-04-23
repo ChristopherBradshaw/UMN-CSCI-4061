@@ -53,6 +53,46 @@ void *get_in_addr(struct sockaddr *sa) {
   return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+/* Load the specified file into the buffer and set the size */
+void load_file(const char *fname, char **buf, int *size) {
+	FILE *fp;
+	long lSize;
+	char *buffer;
+
+	fp = fopen (fname,"rb");
+	if(!fp) {
+    perror(fname);
+    *buf = NULL;
+    *size = 0;
+    return;
+  }
+
+	fseek(fp,0L,SEEK_END);
+	lSize = ftell(fp);
+	rewind(fp);
+
+	/* allocate memory for entire content */
+	buffer = calloc(1,lSize+1);
+	if(!buffer) {
+    fclose(fp);
+    fputs("failed file alloc",stderr);
+    exit(1);
+  }
+
+	/* copy the file into the buffer */
+	if(fread(buffer,lSize,1,fp) != 1) {
+		fclose(fp);
+    free(buffer);
+    fputs("failed file read",stderr);
+    exit(1);
+  }
+
+	/* do your work here, buffer is a string contains the whole text */
+  *buf = buffer;
+  *size = lSize;
+	fclose(fp);
+}
+
 /* Listen for connections */
 void handle_cons() {
   int new_fd;
@@ -80,12 +120,15 @@ void handle_cons() {
       while((n_read = recv(new_fd,tmp_buf,1,0)) != 0 
           || errno == EAGAIN) {
         if(tmp_buf[0] == '0') {
-          printf("Catalog request\n");
-          char *lol = "potatothisisatesthowareyouhi";
-          int file_size = strlen(lol);
-          uint32_t un = htonl(file_size);
+          printf("Catalog request: %s\n",s);
+          char *buf = NULL;
+          int file_size = 0;
+          uint32_t un;
+          /* Load file into a buffer, first send size, then send contents */
+          load_file(CATALOG_FILE,&buf,&file_size);
+          un = htonl(file_size);
           send(new_fd,&un,sizeof(uint32_t),0);
-          send(new_fd,lol,file_size,0);
+          send(new_fd,buf,file_size,0);
         } else if(tmp_buf[0] == '1') {
           printf("File request\n"); 
         }

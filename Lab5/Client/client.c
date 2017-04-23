@@ -35,6 +35,8 @@ int main(int argc, char **argv) {
     
   init_socket();
 
+  read_catalog();
+
   /* If an image type is specified, enter passive mode */
   if(image_type) {
     printf("Passive\n");
@@ -42,7 +44,6 @@ int main(int argc, char **argv) {
     printf("Interactive\n");
   }
 
-  read_catalog();
   close(sockfd);
   return 0;
 }
@@ -77,16 +78,66 @@ void init_socket() {
 
   sockaddr_in.sin_addr.s_addr = in_addr;
   sockaddr_in.sin_family = AF_INET;
-  sockaddr_in.sin_port = htons(port);
+  sockaddr_in.sin_port = htons(server_port);
 
   if(connect(sockfd,(struct sockaddr*)&sockaddr_in, sizeof(sockaddr_in)) < 0) {
     perror("connect");
     exit(EXIT_FAILURE);
   }
+  printf("Connected to %s on port %d.\n",server_ip,server_port);
 }
 
+/* Create a catalog entry from this line */
+catalog_entry_t *build_catalog_entry(char *line) {
+  char buf[256];
+  catalog_entry_t *entry = malloc(sizeof(catalog_entry_t));
+  char *res = line;
+  char *tmp = line;
+  int len;
+
+  /* Get file name (first col) */
+  tmp = strchr(tmp,',');
+  len = tmp-res;
+  strncpy(entry->filename,line,len);
+  entry->filename[len] = '\0';
+  ++tmp;
+
+  /* Get file size (second col) */
+  res = tmp;
+  tmp = strchr(tmp,',');
+  len = tmp-res;
+  ++tmp;
+  strncpy(buf,res,len);
+  buf[len] = '\0';
+  entry->filesize = atoi(buf);
+  if(entry->filesize <= 0) {
+    free(entry);
+    return NULL;
+  }
+
+  /* Get checksum */
+  strcpy(entry->checksum,tmp);
+
+  return entry;
+}
+
+/* Parse through the catalog, */
 void parse_catalog(char *str) {
-  printf("Parsing: %s\n",str);
+  char copy[strlen(str)];
+  strcpy(copy, str);
+  char *tmp = strtok(copy,"\n");
+  int add = 0;
+  /* Go line by line and create an entry */
+  while(tmp != NULL) {
+    /* Skip first line (column names) */
+    if(add) {
+      catalog_entry_t *entry = build_catalog_entry(tmp);
+      if(entry != NULL)
+        catalog[catalog_idx++] = *entry; 
+    }
+    tmp = strtok(NULL, "\n");
+    add = 1;
+  }
 }
 
 /* Read/save catalog from the server */
@@ -158,11 +209,16 @@ int read_config(char *file) {
   /* Make sure we have everything we need, then convert strs */
   if(!ipstr || !portstr || !chunkstr)
     return 1;
-
+  
   strcpy(server_ip,ipstr);
-  port = atoi(portstr);
+  server_port = atoi(portstr);
   chunk_size = atoi(chunkstr);
   image_type = str_to_image_t(imgtypestr);
+
+  if(imgtypestr)
+    printf("Chunk size is %d. Image type is %s.\n", chunk_size, imgtypestr);
+  else
+    printf("Chunk size is %d. No image type specified.\n",chunk_size);
 
   /* Need to free these strs */
   free(ipstr);
