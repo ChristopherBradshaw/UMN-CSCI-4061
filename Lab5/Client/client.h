@@ -10,6 +10,7 @@ Commentary=Image server
 
 // Maximum number of catalog entries
 #define MAX_CATALOG_N 256
+#define OUTPUT_DIR "images"
 
 typedef enum image_type {
   JPG, PNG, GIF, TIFF
@@ -37,6 +38,18 @@ void init_socket(void);
 
 /* Read/save catalog from the server */
 int read_catalog(void);
+
+/* Read/save a file from the server */
+int download_file(int catalog_entry);
+
+/* Print the catalog */
+void dump_catalog(void);
+
+/* Automatically download images of type image_type */
+void do_passive(void);
+
+/* Prompt the user for specific files */
+void do_interactive(void);
 
 /* Read/save a file from the server */
 int read_file(const char *fname);

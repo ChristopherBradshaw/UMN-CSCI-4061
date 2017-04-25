@@ -5,6 +5,10 @@ StudentID1=5300734
 Commentary=Image server
 */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "client.h"
 #include <stdio.h>
 #include <string.h>
@@ -13,8 +17,10 @@ Commentary=Image server
 #include <ctype.h>
 #include <unistd.h>
 #include <errno.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
 
 /* Prototypes */
 int read_config(char *file);
@@ -33,19 +39,51 @@ int main(int argc, char **argv) {
     return 1;
   }
     
+  mkdir("images",0777);
   init_socket();
-
   read_catalog();
-
+  dump_catalog();
   /* If an image type is specified, enter passive mode */
   if(image_type) {
-    printf("Passive\n");
+    do_passive();
   } else {
-    printf("Interactive\n");
+    do_interactive();
   }
 
   close(sockfd);
   return 0;
+}
+
+void do_passive() {
+  
+}
+
+void do_interactive() {
+  do {
+    printf("Enter ID to download (0 to quit):\n");
+    int c = getchar();
+    int number = (int)c - (int)'0';
+    while((c = getchar()) != '\n' && c != EOF); // Clear stdin
+
+    if(number == 0)
+      break;
+    if(number < 0 || number > catalog_idx)
+      continue;
+    
+    char *fname = catalog[number-1].filename;
+    printf("Downloaded %s, %d chunks transmitted.\n",fname,download_file(number-1));
+  } while(1);
+}
+
+/* Print the catalog */
+void dump_catalog() {
+  printf("=================================================\n");
+  printf("Dumping catalog\n");
+  int i;
+  for(i = 0; i < catalog_idx; i++) {
+    printf("[%d]: %s\n",i+1,catalog[i].filename); 
+  }
+  printf("=================================================\n");
 }
 
 /* Initialize the connection */
@@ -166,8 +204,39 @@ int read_catalog() {
 }
 
 /* Read/save a file from the server */
-int read_file(const char *fname) {
-  return 0;
+int download_file(int catalog_num) {
+  catalog_entry_t entry = catalog[catalog_num];
+  char *fname = entry.filename;
+
+  /* Specify request type (file download) */
+  send(sockfd,"1",1,0);
+  int len = strlen(fname);
+  /* Send size of filename, then filename */
+  uint32_t un = htonl(len);
+  send(sockfd,&un,sizeof(uint32_t),0); 
+  send(sockfd,fname,strlen(fname),0);
+
+  /* Get the image data */
+  int file_size = entry.filesize;
+  char file_buf[file_size];
+  char buf[chunk_size];
+  int total_read = 0;
+  int rd;
+  while(total_read < file_size && 
+      (((rd = recv(sockfd,buf,chunk_size,0)) != 0) || errno == EAGAIN)) {
+    strncpy(file_buf+total_read,buf,rd);
+    total_read += rd;
+  }
+
+  char *dst;
+  asprintf(&dst,"%s/%s",OUTPUT_DIR,fname);
+  /* Write file to disk */
+  FILE *out = fopen(dst,"ab+");
+  fwrite(file_buf,total_read,1,out);
+  fclose(out);
+
+  printf("%d:%d\n",total_read,chunk_size);
+  return ceil(((double)total_read) / chunk_size);
 }
 
 /* Read the specified value for a keyword/label. Ex: Port=8080 */
@@ -229,6 +298,9 @@ int read_config(char *file) {
 }
 
 image_t *str_to_image_t(char *str) {
+  if(str == NULL)
+    return NULL;
+
   // Change str to lower 
   char *iter = str;
   for( ; *iter; ++iter) *iter= tolower(*iter);

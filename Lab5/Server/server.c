@@ -22,6 +22,7 @@ Commentary=Image server
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <arpa/inet.h>
 
 int read_config(char *file);
@@ -93,6 +94,13 @@ void load_file(const char *fname, char **buf, int *size) {
 	fclose(fp);
 }
 
+/* Search directories and find path for this file */
+char *get_abs_filepath(char *fname) {
+  char *newpath;
+  asprintf(&newpath,"images/%s",fname);
+  return newpath;
+}
+
 /* Listen for connections */
 void handle_cons() {
   int new_fd;
@@ -130,7 +138,28 @@ void handle_cons() {
           send(new_fd,&un,sizeof(uint32_t),0);
           send(new_fd,buf,file_size,0);
         } else if(tmp_buf[0] == '1') {
-          printf("File request\n"); 
+					/* File name length is sent first, read it */
+					uint32_t n;
+					recv(new_fd,&n,sizeof(uint32_t),0);
+          int fnamelen = ntohl(n);
+          char fname[fnamelen+1];
+          recv(new_fd,fname,fnamelen,0);
+          fname[fnamelen] = '\0';
+          printf("File request [intereactive, %s]: %s\n",fname,s);
+          char *abs_filepath = get_abs_filepath(fname);
+          FILE *fp;
+          if((fp = fopen(abs_filepath,"rb")) == NULL) {
+            printf("Could not open file %s\n",abs_filepath);
+          }
+
+          /* Get filesize */
+          struct stat st;
+          fstat(fileno(fp),&st);
+          int fsize = st.st_size;
+          char *buf = malloc(fsize);
+          fread(buf,1,fsize,fp);
+          fclose(fp);
+          send(new_fd,buf,fsize,0);
         }
       }
       printf("Terminated connection: %s\n",s);

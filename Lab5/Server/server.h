@@ -21,6 +21,9 @@ int sockfd;
 
 /* Functions */
 
+/* Search directories and find path for this file */
+char *get_abs_filepath(char *fname);
+
 /* Initialize the connection */
 void init_socket(void);
 
