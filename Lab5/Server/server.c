@@ -25,6 +25,7 @@ Commentary=Image server
 #include <sys/stat.h>
 #include <arpa/inet.h>
 #include <sys/sendfile.h>
+#include <ftw.h>
 
 int read_config(char *file);
 char *read_val(const char *key, char *str, int len);
@@ -43,9 +44,29 @@ int main(int argc, char **argv) {
     return 1;
   }
     
+  build_catalog();
   init_socket();
   handle_cons();
   return 0;
+}
+
+int visit(const char *name, const struct stat *status, int type) {
+	if(type != FTW_F)
+  	return 0;
+
+  printf("File: %s\n",name);
+  return 0;
+}
+
+void build_catalog() {
+  remove(CATALOG_FILE);
+  FILE *fp;
+  if((fp = fopen(CATALOG_FILE,"ab+")) == NULL) {
+    perror("failed to open catalog file");
+    return;
+  }
+  ftw(server_dir,visit,20);
+  fclose(fp);
 }
 
 void *get_in_addr(struct sockaddr *sa) {
