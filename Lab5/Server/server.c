@@ -24,6 +24,7 @@ Commentary=Image server
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
+#include <sys/sendfile.h>
 
 int read_config(char *file);
 char *read_val(const char *key, char *str, int len);
@@ -156,10 +157,11 @@ void handle_cons() {
           struct stat st;
           fstat(fileno(fp),&st);
           int fsize = st.st_size;
-          char *buf = malloc(fsize);
-          fread(buf,1,fsize,fp);
+
+          /* Use sendfile to do all the work */
+          long offset = 0;
+          sendfile(new_fd,fileno(fp),&offset,fsize);
           fclose(fp);
-          send(new_fd,buf,fsize,0);
         }
       }
       printf("Terminated connection: %s\n",s);

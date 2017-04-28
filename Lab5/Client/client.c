@@ -21,6 +21,7 @@ Commentary=Image server
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
+#include <sys/sendfile.h>
 
 /* Prototypes */
 int read_config(char *file);
@@ -71,7 +72,12 @@ void do_interactive() {
       continue;
     
     char *fname = catalog[number-1].filename;
-    printf("Downloaded %s, %d chunks transmitted.\n",fname,download_file(number-1));
+    int chunks = download_file(number-1);
+    if(chunks == 0) {
+      printf("Failed to download %s.\n",fname);
+    } else {
+      printf("Downloaded %s, %d chunks transmitted.\n",fname,chunks);
+    }
   } while(1);
 }
 
@@ -220,22 +226,30 @@ int download_file(int catalog_num) {
   int file_size = entry.filesize;
   char file_buf[file_size];
   char buf[chunk_size];
-  int total_read = 0;
+  long total_read = 0;
   int rd;
-  while(total_read < file_size && 
-      (((rd = recv(sockfd,buf,chunk_size,0)) != 0) || errno == EAGAIN)) {
-    strncpy(file_buf+total_read,buf,rd);
-    total_read += rd;
-  }
-
+  int i;
   char *dst;
   asprintf(&dst,"%s/%s",OUTPUT_DIR,fname);
-  /* Write file to disk */
+  remove(dst);
   FILE *out = fopen(dst,"ab+");
-  fwrite(file_buf,total_read,1,out);
+  if(!out) {
+    mkdir(OUTPUT_DIR,0777);
+    out = fopen(dst,"ab+");
+    if(!out) {
+      perror("failed to open");
+      return 0;
+    }
+  }
+  /* Breakup the file stream into chunks, write as we read them */
+  while(total_read < file_size && 
+      (((rd = recv(sockfd,buf,chunk_size,0)) != 0) || errno == EAGAIN)) {
+    for(i = 0; i < rd; i++) {
+      fputc(buf[i],out);
+    }
+    total_read += rd;
+  }
   fclose(out);
-
-  printf("%d:%d\n",total_read,chunk_size);
   return ceil(((double)total_read) / chunk_size);
 }
 
