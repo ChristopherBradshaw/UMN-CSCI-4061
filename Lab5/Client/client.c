@@ -22,6 +22,7 @@ Commentary=Image server
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <sys/sendfile.h>
+#include "../md5/md5sum.h"
 
 /* Prototypes */
 int read_config(char *file);
@@ -55,6 +56,37 @@ int main(int argc, char **argv) {
   return 0;
 }
 
+int validate_checksum(char *fname) {
+  char *catalog_md5 = NULL;
+  int j;
+  for(j = 0; j < catalog_idx; j++) {
+    if(strcmp(fname,catalog[j].filename) == 0) {
+      catalog_md5 = catalog[j].checksum;
+      break;
+    }
+  }
+
+  if(catalog_md5 == NULL) {
+    printf("Faield to find %s in catalog\n",fname); 
+    return 0;
+  }
+
+  char *path;
+  asprintf(&path,"%s/%s",OUTPUT_DIR,fname);
+  char res_md5[128];
+  int idx = 0;
+	unsigned char sum[MD5_DIGEST_LENGTH];
+  md5sum(path,sum);
+  for(j = 0; j < MD5_DIGEST_LENGTH; j++) {
+    char *tmp;
+    asprintf(&tmp,"%02x",sum[j]);
+    res_md5[idx++] = tmp[0];
+    res_md5[idx++] = tmp[1];
+  }
+  res_md5[32] = '\0';
+  return (strcmp(res_md5,catalog_md5) == 0);
+}
+
 void do_passive() {
   
 }
@@ -73,10 +105,11 @@ void do_interactive() {
     
     char *fname = catalog[number-1].filename;
     int chunks = download_file(number-1);
-    if(chunks == 0) {
+    
+    if(chunks == 0 || !validate_checksum(fname)) {
       printf("Failed to download %s.\n",fname);
     } else {
-      printf("Downloaded %s, %d chunks transmitted.\n",fname,chunks);
+      printf("Downloaded %s, %d chunks transmitted. Checksum validated. \n",fname,chunks);
     }
   } while(1);
 }
@@ -160,6 +193,7 @@ catalog_entry_t *build_catalog_entry(char *line) {
   }
 
   /* Get checksum */
+  while(*tmp == ' ' && tmp++);
   strcpy(entry->checksum,tmp);
 
   return entry;
@@ -224,7 +258,6 @@ int download_file(int catalog_num) {
 
   /* Get the image data */
   int file_size = entry.filesize;
-  char file_buf[file_size];
   char buf[chunk_size];
   long total_read = 0;
   int rd;

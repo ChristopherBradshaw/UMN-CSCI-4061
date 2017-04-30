@@ -26,6 +26,7 @@ Commentary=Image server
 #include <arpa/inet.h>
 #include <sys/sendfile.h>
 #include <ftw.h>
+#include "../md5/md5sum.h"
 
 int read_config(char *file);
 char *read_val(const char *key, char *str, int len);
@@ -53,8 +54,8 @@ int main(int argc, char **argv) {
 int visit(const char *name, const struct stat *status, int type) {
 	if(type != FTW_F)
   	return 0;
-
-  printf("File: %s\n",name);
+  status = NULL;
+  strcpy(file_list[file_list_idx++],name);
   return 0;
 }
 
@@ -66,7 +67,26 @@ void build_catalog() {
     return;
   }
   ftw(server_dir,visit,20);
+  fprintf(fp,"filename, size, checksum\n");
+  int i;
+  // Visit every file we added in the ftw call
+  for(i = 0; i < file_list_idx; i++) {
+    // For each file, print a 3-tuple to the file containing
+    // basefilename, size, md5
+    char *fname = file_list[i];
+    struct stat st;
+    stat(fname,&st);
+    fprintf(fp,"%s, %lu, ",basename(fname),st.st_size);
+    unsigned char sum[MD5_DIGEST_LENGTH];
+    md5sum(fname,sum);
+    int j;
+    for(j = 0; j < MD5_DIGEST_LENGTH; j++) {
+      fprintf(fp,"%02x",sum[j]);
+    }
+    fprintf(fp,"\n");
+  }
   fclose(fp);
+  printf("Built catalog\n");
 }
 
 void *get_in_addr(struct sockaddr *sa) {
@@ -118,9 +138,14 @@ void load_file(const char *fname, char **buf, int *size) {
 
 /* Search directories and find path for this file */
 char *get_abs_filepath(char *fname) {
-  char *newpath;
-  asprintf(&newpath,"images/%s",fname);
-  return newpath;
+  int i;
+  for(i = 0; i < file_list_idx; i++) {
+    char *tmp = file_list[i];
+    if(strcmp(basename(tmp),fname) == 0) {
+      return tmp;
+    }
+  }
+  return NULL;
 }
 
 /* Listen for connections */
@@ -169,6 +194,10 @@ void handle_cons() {
           fname[fnamelen] = '\0';
           printf("File request [intereactive, %s]: %s\n",fname,s);
           char *abs_filepath = get_abs_filepath(fname);
+          if(abs_filepath == NULL) {
+            close(new_fd);
+            break;
+          }
           FILE *fp;
           if((fp = fopen(abs_filepath,"rb")) == NULL) {
             printf("Could not open file %s\n",abs_filepath);

@@ -21,6 +21,7 @@ static int port;
 static char server_dir[128];
 static int sockfd;
 static char file_list[MAX_NUM_FILES][MAX_FILE_LEN];
+static int file_list_idx = 0;
 
 /* Functions */
 
