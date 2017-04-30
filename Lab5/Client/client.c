@@ -125,13 +125,16 @@ void do_interactive() {
     printf("Enter ID to download (0 to quit):\n");
     int c = getchar();
     int number = (int)c - (int)'0';
-    while((c = getchar()) != '\n' && c != EOF); // Clear stdin
+    while((c = getchar()) != '\n' && c != EOF) {
+      number = number * 10 + ((int)c-(int)'0');
+    }
 
     if(number == 0)
       break;
     if(number < 0 || number > catalog_idx)
       continue;
 
+    printf("Number is: %d\n",number);
     download_file(number-1); 
   } while(1);
 }
