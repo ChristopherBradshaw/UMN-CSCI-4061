@@ -55,6 +55,7 @@ int main(int argc, char **argv) {
 
   finish_html();
   close(sockfd);
+  printf("Done.\n");
   return 0;
 }
 
@@ -71,6 +72,7 @@ void finish_html() {
   fprintf(html,"</ul></body>\n</html>");
   fclose(html);
   html = NULL;
+  printf("Wrote HTML file.\n");
 }
 
 /* Check the specified downloaded file against the checksum for the file in the catalog */

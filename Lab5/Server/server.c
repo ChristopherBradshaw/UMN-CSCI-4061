@@ -26,6 +26,7 @@ Commentary=Image server
 #include <arpa/inet.h>
 #include <sys/sendfile.h>
 #include <ftw.h>
+#include <dirent.h>
 #include "../md5/md5sum.h"
 
 int read_config(char *file);
@@ -45,6 +46,13 @@ int main(int argc, char **argv) {
     return 1;
   }
     
+  DIR* check;
+  if((check = opendir(server_dir)) == NULL) {
+    fprintf(stderr,"Fatal: Could not read input directory: %s\n",server_dir);
+    return 1;
+  }
+  closedir(check);
+
   build_catalog();
   init_socket();
   handle_cons();

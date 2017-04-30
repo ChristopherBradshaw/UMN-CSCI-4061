@@ -1,0 +1,11 @@
+Christopher Bradshaw (no partner)
+5300734
+-------------------------------------
+Client:
+./client client.config
+
+Server:
+./server server.config
+
+
+Server must be started before the client. No signification deviations from lab specs.
