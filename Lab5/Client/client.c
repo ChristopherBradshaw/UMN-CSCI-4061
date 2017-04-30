@@ -42,6 +42,7 @@ int main(int argc, char **argv) {
   }
     
   mkdir("images",0777);
+  init_html();
   init_socket();
   read_catalog();
   dump_catalog();
@@ -52,10 +53,27 @@ int main(int argc, char **argv) {
     do_interactive();
   }
 
+  finish_html();
   close(sockfd);
   return 0;
 }
 
+/* Set up the html file */
+void init_html() {
+  remove(HTML_FILE);
+  html = fopen(HTML_FILE,"ab+");
+  fprintf(html,"<html>\n<head><title>Downloaded Images</title></head>\n<body>\n");
+  fprintf(html,"<h1>Downloaded Images</h1>\n<ul>\n");
+}
+
+/* Finish off the html file */
+void finish_html() {
+  fprintf(html,"</ul></body>\n</html>");
+  fclose(html);
+  html = NULL;
+}
+
+/* Check the specified downloaded file against the checksum for the file in the catalog */
 int validate_checksum(char *fname) {
   char *catalog_md5 = NULL;
   int j;
@@ -77,6 +95,7 @@ int validate_checksum(char *fname) {
   int idx = 0;
 	unsigned char sum[MD5_DIGEST_LENGTH];
   md5sum(path,sum);
+  /* Convert the digest to a basic string format */
   for(j = 0; j < MD5_DIGEST_LENGTH; j++) {
     char *tmp;
     asprintf(&tmp,"%02x",sum[j]);
@@ -93,6 +112,7 @@ char* get_file_type(char *f_name) {
   return tmp == NULL ? NULL : tmp+1;
 }
 
+/* Return 1 if the specified file should be downloaded (depending on image_type) */
 int should_download_file(char *fname) {
   char *ftype = get_file_type(fname);	
   switch(*image_type) {
@@ -107,9 +127,10 @@ int should_download_file(char *fname) {
     default:
       break;
   }
-  return 1;
+  return 0;
 }
 
+/* Enter passive mode */
 void do_passive() {
   printf("Entering passive mode..\n");
   int i;
@@ -120,11 +141,13 @@ void do_passive() {
   }
 }
 
+/* Enter interactive mode */
 void do_interactive() {
   do {
     printf("Enter ID to download (0 to quit):\n");
     int c = getchar();
     int number = (int)c - (int)'0';
+    /* Read one char at a time and build a number */
     while((c = getchar()) != '\n' && c != EOF) {
       number = number * 10 + ((int)c-(int)'0');
     }
@@ -134,7 +157,6 @@ void do_interactive() {
     if(number < 0 || number > catalog_idx)
       continue;
 
-    printf("Number is: %d\n",number);
     download_file(number-1); 
   } while(1);
 }
@@ -182,10 +204,12 @@ void init_socket() {
   sockaddr_in.sin_family = AF_INET;
   sockaddr_in.sin_port = htons(server_port);
 
+  /* Try to connect */
   if(connect(sockfd,(struct sockaddr*)&sockaddr_in, sizeof(sockaddr_in)) < 0) {
     perror("connect");
     exit(EXIT_FAILURE);
   }
+
   printf("Connected to %s on port %d.\n",server_ip,server_port);
 }
 
@@ -312,8 +336,9 @@ int download_file(int catalog_num) {
   int chunks = ceil(((double)total_read) / chunk_size);
   if(chunks == 0 || !validate_checksum(fname)) {
     printf("Failed to download %s.\n",fname);
-    exit(EXIT_FAILURE);
+    fprintf(html,"<li>(Failed -- bad checksum?)\t%s</li>\n",fname);
   } else {
+    fprintf(html,"<li>(Checksum match)\t<a href=%s/%s>%s</a></li>\n",OUTPUT_DIR,fname,fname);
     printf("Downloaded %s, %d chunks transmitted. Checksum validated. \n",fname,chunks);
   }
 

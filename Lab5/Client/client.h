@@ -7,10 +7,12 @@ Commentary=Image server
 
 #ifndef CLIENT_H
 #define CLIENT_H
+#include <stdio.h>
 
 // Maximum number of catalog entries
 #define MAX_CATALOG_N 256
 #define OUTPUT_DIR "images"
+#define HTML_FILE "download.html"
 
 typedef enum image_type {
   JPG, PNG, GIF, TIFF
@@ -29,9 +31,19 @@ static char server_ip[128]; // Server IP address
 static int server_port;  // Server port
 static int chunk_size;  // Max number of bytes in a packet
 static image_t *image_type; // Type of image to download (implies passive mode)
+static FILE *html;  // File pointer to html output file
 int sockfd; // File descriptor for connection to server
 
 /* Functions */
+
+/* Initialize the html file */
+void init_html(void);
+
+/* Write to the html file */
+void write_html(char *str);
+
+/* Finish and close the html file*/
+void finish_html();
 
 /* Initialize the connection */
 void init_socket(void);
