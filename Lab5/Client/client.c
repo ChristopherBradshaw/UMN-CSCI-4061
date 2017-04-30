@@ -87,8 +87,37 @@ int validate_checksum(char *fname) {
   return (strcmp(res_md5,catalog_md5) == 0);
 }
 
+/* Return the file extension (ex: a.jpg -> jpg) */
+char* get_file_type(char *f_name) {
+  char *tmp = strrchr(f_name,'.');
+  return tmp == NULL ? NULL : tmp+1;
+}
+
+int should_download_file(char *fname) {
+  char *ftype = get_file_type(fname);	
+  switch(*image_type) {
+    case JPG:
+      return (strcmp(ftype,"jpg") == 0 || strcmp(ftype,"JPG") == 0);
+    case PNG:
+      return (strcmp(ftype,"png") == 0 || strcmp(ftype,"PNG") == 0);
+    case GIF:
+      return (strcmp(ftype,"gif") == 0 || strcmp(ftype,"GIF") == 0);
+    case TIFF:
+      return (strcmp(ftype,"tiff") == 0 || strcmp(ftype,"TIFF") == 0);
+    default:
+      break;
+  }
+  return 1;
+}
+
 void do_passive() {
-  
+  printf("Entering passive mode..\n");
+  int i;
+  for(i = 0; i < catalog_idx; i++) {
+    if(should_download_file(catalog[i].filename)) {
+      download_file(i);
+    }
+  }
 }
 
 void do_interactive() {
@@ -102,15 +131,8 @@ void do_interactive() {
       break;
     if(number < 0 || number > catalog_idx)
       continue;
-    
-    char *fname = catalog[number-1].filename;
-    int chunks = download_file(number-1);
-    
-    if(chunks == 0 || !validate_checksum(fname)) {
-      printf("Failed to download %s.\n",fname);
-    } else {
-      printf("Downloaded %s, %d chunks transmitted. Checksum validated. \n",fname,chunks);
-    }
+
+    download_file(number-1); 
   } while(1);
 }
 
@@ -234,7 +256,7 @@ int read_catalog() {
   int total_read = 0;
   int rd;
   while(total_read < catalog_size && 
-      (((rd = recv(sockfd,buf,5,0)) != 0) || errno == EAGAIN)) {
+      (((rd = recv(sockfd,buf,chunk_size,0)) != 0) || errno == EAGAIN)) {
     strncpy(file_buf+total_read,buf,rd);
     total_read += rd;
   }
@@ -283,7 +305,16 @@ int download_file(int catalog_num) {
     total_read += rd;
   }
   fclose(out);
-  return ceil(((double)total_read) / chunk_size);
+
+  int chunks = ceil(((double)total_read) / chunk_size);
+  if(chunks == 0 || !validate_checksum(fname)) {
+    printf("Failed to download %s.\n",fname);
+    exit(EXIT_FAILURE);
+  } else {
+    printf("Downloaded %s, %d chunks transmitted. Checksum validated. \n",fname,chunks);
+  }
+
+  return chunks;
 }
 
 /* Read the specified value for a keyword/label. Ex: Port=8080 */

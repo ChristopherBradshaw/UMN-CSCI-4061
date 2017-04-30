@@ -51,11 +51,30 @@ int main(int argc, char **argv) {
   return 0;
 }
 
+/* Return the file extension (ex: a.jpg -> jpg) */
+char* get_file_type(const char *f_name)
+{
+  char *tmp = strrchr(f_name,'.');
+
+  /* Doesn't have an extension */
+  if(tmp == NULL)
+    return NULL;
+
+  return tmp+1;
+}
+
 int visit(const char *name, const struct stat *status, int type) {
 	if(type != FTW_F)
   	return 0;
   status = NULL;
-  strcpy(file_list[file_list_idx++],name);
+  char *ftype = get_file_type(name);
+  char *t;
+  for(t = ftype; *t; ++t) *t = tolower(*t);   // Convert type to lower case
+  if(strcmp(ftype,"jpg") == 0 || strcmp(ftype,"png") == 0 || strcmp(ftype,"gif") == 0 ||
+      strcmp(ftype,"tiff") == 0) {
+    // This is an image
+    strcpy(file_list[file_list_idx++],name);
+  }
   return 0;
 }
 
@@ -192,7 +211,7 @@ void handle_cons() {
           char fname[fnamelen+1];
           recv(new_fd,fname,fnamelen,0);
           fname[fnamelen] = '\0';
-          printf("File request [intereactive, %s]: %s\n",fname,s);
+          printf("File request [%s]: %s\n",fname,s);
           char *abs_filepath = get_abs_filepath(fname);
           if(abs_filepath == NULL) {
             close(new_fd);
